@@ -1,0 +1,63 @@
+.DS_Store
+__pycache__
+
+# media folder
+#media
+
+# Python Stubs
+*_pb2_grpc.py
+*_pb2.py
+*_pb2_grpc.pyc
+*_pb2.pyc
+*_pb2.cpython-37.pyc
+*_pb2_grpc.cpython-37.pyc
+*_pb2.cpython-38.pyc
+*_pb2_grpc.cpython-38.pyc
+
+# C Sharp Stubs
+Briar.cs
+BriarError.cs
+BriarService.cs
+BriarServiceGrpc.cs
+
+# C++ Stubs
+*.pb.cc
+*.pb.h
+
+# Objective-C Stubs
+*.pbobjc.m
+*.pbobjc.h
+*.pbrpc.h
+*.pbrpc.m
+
+# php - TODO: This may need to be fixed at some point.
+*.php
+
+# ruby
+*_pb.rb
+
+# js
+*.js
+
+# Virtual Env
+venv
+
+# extra folders
+proto-temp
+samples-temp
+.idea
+dlib_toy_2.py
+helloworld_service_tmp.py
+
+
+# generated files/folders
+*.detection
+*cli_history.txt
+samples/python/databases_*
+databases/
+*.egg-info
+build
+dist
+
+# other
+python_client_bak.py

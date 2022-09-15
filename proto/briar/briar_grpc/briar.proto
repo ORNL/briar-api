@@ -1,0 +1,671 @@
+/*
+ * License
+ */
+
+
+syntax = "proto3";
+
+option csharp_namespace="briar.BriarGrpc";
+
+package briar;
+
+// ----------------------------------------------------------------------------
+// Initialization
+
+
+// Representation of the service's current status
+enum BriarServiceStatus {
+	UNKNOWN = 0;
+	READY = 1;
+	ERROR = 2;
+	BUSY = 3;
+};
+
+// Flag tells service what mode to run in when running an extract command
+enum ExtractFlags {
+	EXTRACT_FULL_IMAGE = 0;
+	EXTRACT_AUTO_DETECTION = 1;
+	EXTRACT_PROVIDED_DETECTION = 2;
+}
+
+// Flags tell service what mode to run in when running enroll command
+enum EnrollFlags {
+    ENROLL_FULL_IMAGE = 0;    	   // Do not run detections: extract from whole image
+    ENROLL_AUTO_DETECTION = 1;     // Run detection on the image, generate detections
+    ENROLL_PROVIDED_DETECTION = 2; // Extract and enroll from provided detections
+    ENROLL_PROVIDED_TEMPLATE = 3;  // Enroll from provided template
+}
+
+// Flag tells service what mode to run in when running verify command
+enum VerifyFlags {
+    VERIFY_FULL_IMAGE = 0; 			// Create template from the entire image and use resulting template
+  	VERIFY_AUTO_DETECTION = 1;
+		VERIFY_PROVIDED_DETECTIONS = 2; // Create templates from the provided detections
+    VERIFY_PROVIDED_TEMPLATES = 3;  // Use provided templates
+}
+
+// Tells service what mode to run in when running search command
+enum SearchFlags {
+    SEARCH_FULL_IMAGE = 0;     // Create template from the entire image and use resulting template
+    SEARCH_AUTO_DETECTION = 1; // Run detection on image, generate detections, extract templates, and search
+    SEARCH_PROVIDED_DETECTIONS = 2;     // Create templates from the provided detections
+    SEARCH_PROVIDED_TEMPLATES = 3;      // Use provided templates
+}
+
+enum MediaType {
+	MEDIA_IMAGE = 0;
+	MEDIA_VIDEO = 1;
+}
+
+// ----------------------------------------------------------------------------
+// Versioning
+
+// Query the implementation for the version
+message APIVersion {
+    int32 major = 1;
+    int32 minor = 2;
+    int32 patch = 3;
+};
+
+
+// ----------------------------------------------------------------------------
+// Configuration
+
+
+// ----------------------------------------------------------------------------
+// Options Primitives - These will indicate when default 
+// values should be used and if an option is provided
+
+message StringOption {
+	bool override_default = 1;
+	string value = 2;
+}
+
+message BoolOption {
+	bool override_default = 1;
+	bool value = 2;
+}
+
+message IntOption {
+	bool override_default = 1;
+	int64 value = 2;
+}
+
+message FloatOption {
+	bool override_default = 1;
+	float value = 2;
+}
+
+// ----------------------------------------------------------------------------
+// Media
+message BriarMedia {
+	int32 width = 1;				// Width of img in px
+	int32 height = 2;				// Height of img in px
+	int32 channels = 3;				// Number of color layers
+	int32 frame_count = 4;			// Number of frames in this media message
+	float frame_rate = 5; 			// Framerate in frames/second
+	int32 segment_id = 6;               // A number identifying the segment in a stream of media
+	int32 segment_total = 7;            // A number specifying the total number of segments to expect.  A value of -1 indicates a continuous stream with an unknown end.
+	int32 frame_number = 8;							// If this is a single frame of a video, this denotes the frame number
+
+	enum DataType {					// Enum to specify data encoding of the image data
+		RGB8 = 0;							//Media data is expected to be returned to the API in this format, or MONO8
+		MONO8 = 1;						//Media data is expected to be returned to the API in this format, or RGB8
+		RGBA8 = 2;
+		RGBA16 = 3;
+		RGB16 =4;
+		MONO16 = 5;
+//		UINT8 = 6;			//DEPRICATED used only for legacy systems
+//		UINT16 = 7;			//DEPRICATED used only for legacy systems
+		FLOAT32 = 19;
+		URL = 8;
+		PNG = 9;                    // Lossless Compression
+		JPG = 10;
+		RAW = 11;
+		EPS = 12;
+		TIF = 13;
+		GIF = 14;
+		MJPG = 15;
+		H264 = 16;
+		H265 = 17;
+		SOURCE_ONLY = 18;					// No media data is provided beyond the source location - this means it is up to the performer to load and decode the media
+	};
+
+	DataType type = 9;				// Data type of the media data
+	DataType source_type = 10; // Data type of the source of the media (e.g. if this is a frame of a video)
+	bytes data = 11;					// Array of bytes containing media data. If raw color data it should be in RGB/RGBA order.
+
+	string source = 12;				// A string describing the source of the media (url,filepath,etc.)
+	string serverside_source = 13; // A string describing the media location if it presides on the server side (i.e. in a location that the performer's algorithm can access directly)
+	string description = 14;		// Human friendly String to document image
+	string datetime = 15;			// Optional: timestamp for tracking purposes
+	bool isCropped = 16; 			// Optional: A boolean to specify if the given media file is pre-cropped or full
+	repeated MediaMetadata metadata = 17; // Optional metadata for the entire media stream;
+};
+
+// ----------------------------------------------------------------------------
+// Enrollment
+
+// messages
+
+// Defines actions to take when enrolling into a gallery
+message EnrollOptions {
+	BoolOption save_metadata = 1;      // log the image on the server - Useful for debugging and record keeping
+	BoolOption debug = 2;              // Save or print more info on the server side
+	EntryType entry_type = 3;					// Type of entry, either 'subject' or 'media'
+	string subject_id = 4;                          // ID of subject this record belongs to
+	string media_id = 5;                            // ID of media this record belongs to (should be unique per record)
+//	string entry_id = 4;
+	string subject_name = 6;
+	IntOption		 enroll_batch = 7;						// batch size for enrollment processes
+	EnrollFlags enroll_flag = 8;
+	BiometricModality modality = 9;			// Modality of enrollment (i.e. face or whole body)
+	BoolOption	 return_media = 10;						// Should we return media (e.i. cropped images) related to the detections back to the client?
+	BoolOption store_media = 11;					// Should the database store the media along with templates for searching
+	repeated Attribute attributes = 12; // Used for passing algorithm specific options
+
+};
+
+message SearchOptions {
+	// Defines options to use for search operations.
+	StringOption out_dir = 1;			// DEPRICATED: not needed on server side. Save the search results as a CSV
+	StringOption output_type = 2;		// DEPRICATED: ???. Output the search logs
+	StringOption search_database = 3; 	// DEPRICATED: Already in search request. The database name to be used as the gallery/search database
+	StringOption probe_database = 4;  	// DEPRICATED: Already in search request. The database name to be used as the probe database (if none, it will not be used)
+	FloatOption search_threshold = 5;	// OPTIONAL: Exclude search results below this threshold. Server should select a reasonable default if missing.
+	IntOption max_results = 6;			// OPTIONAL: Maximum number of results per probe.
+	IntOption search_batch = 7;			// DEPRICATED: ???. batch size for search processes
+	BoolOption use_detections = 8;
+	BoolOption use_templates = 9;
+	SearchFlags flag = 10;
+	BoolOption	return_media = 11;		// OPTIONAL: Should we return media (e.i. cropped images) related to the detections back to the client?
+	BiometricModality modality = 12;	// REQUIRED: If specified use this modality for search operations.  If "UNSPECIFIED" fuse modalities together.
+	BoolOption full = 13;				// OPTIONAL: to perform a full MxN search instead of a K-core search
+	BoolOption return_matrix = 14;		// OPTIONAL: to return the search matrix instead matchresults
+};
+
+message VerifyOptions {
+	// Defines options to use for search operations.
+	BoolOption debug = 1;
+	BoolOption use_detections = 8;
+	BoolOption use_templates = 9;
+	BoolOption use_whole_image = 10;
+	VerifyFlags flag = 11;
+	BoolOption	return_media = 12;		// OPTIONAL: Should we return media (e.i. cropped images) related to the detections back to the client?
+	BiometricModality modality = 13;	// REQUIRED: If specified use this modality for search operations.  If "UNSPECIFIED" fuse modalities together.
+};
+
+
+enum EntryType{
+	ENTRY_TYPE_UNKNOWN = 0; // Not typically used
+	ENTRY_TYPE_SUBJECT = 1; // Entry corresponds to a person (gallery) and entries should be aggregated under a person_id
+	ENTRY_TYPE_MEDIA = 2;   // Entry corresponds to media (probe) and entries should be under a media_id
+}
+
+
+enum BiometricModality{
+	/* Used to specify general biometric modalities.  Typical BRIAR modalities fall into three categories: FACE, BODY, or GAIT.  UNSPECIFIED will typcially would be the fusion of all modalities. */
+	
+	UNSPECIFIED = 0; // Use the fusion of all available modalities.
+	WHOLE_BODY = 1; // deprecated.  Use BODY for general body appearance or features
+	FACE = 2;
+	GAIT = 3;
+	BODY = 4;
+	ANTHROPOMETRY = 5;
+	HEAD = 6;
+	BEHAVIOR = 7;
+	SOFT_BIOMETRICS = 8;
+	FINGERPRINT = 9;
+	IRIS = 10;
+	VOICE = 11;
+	HAND = 12;
+	EAR = 13;
+	PALM = 14;
+	OTHER = 15;
+}
+
+// Information about the entity being enrolled
+message EnrollmentInfo {
+	string database_id = 1;      // uuid for this database
+//	string entry_id = 2;         // uuid for this entry (this is unique, typically subject_id or media_id)
+	// OPTIONAL unique id of the given input media.  If not provide a unique id
+	// should be assigned by the service: UNKNOWN_################.
+	string media_id = 2;
+	// OPTIONAL unique id of the given input subject within a media.  If not provide a unique id
+	// should be assigned by the service: UNKNOWN_################.
+	string subject_id = 3;
+	EntryType type = 4;           // subject_id or media_id
+	string name = 5;             // name of subject, if known
+	string source = 6;           // Describes the the media source
+	repeated Attribute attributes = 7; // Used for passing additional metadata
+};
+
+
+// ----------------------------------------------------------------------------
+// Image Detection
+
+// messages
+
+// TODO optionally break this out into briar_geometry.proto
+// message to hold rectangle
+message BriarRect {
+    int32 x = 1;        // Upper left corner
+    int32 y = 2;        // Upper left corner
+    int32 width = 3;    // x distance to lower right corner
+    int32 height = 4;   // y distance to lower right corner
+};
+
+// message to hold a point
+message BriarPoint2D {
+    float x = 1;
+    float y = 2;
+};
+
+// message that contains progress
+message BriarProgress {
+		int64 currentStep = 1;  //The current step that the process is on
+		int64 totalSteps = 2;  //The total steps that the process has to complete (i.e. frames in a video)
+}
+
+// message to hold a vector
+message BriarVector {
+    repeated float data = 1;    // arbitrary length array to store vector
+};
+
+// message to hold a vector of vectors
+message BriarMatrix {
+		repeated string column_headers = 1; // Optional: headers for each column
+		repeated string row_headers = 2; // Optional: headers for each row
+		repeated string column_sources = 3; // Optional: sources for each column
+		repeated string row_sources = 4; // Optional: sources for each row
+  	repeated Attribute column_attributes = 5;
+  	repeated Attribute row_attributes = 6;
+	repeated BriarVector rows = 7;  // arbitrary length array of vectors to store row
+};
+
+
+/*This is intended to support flexible encoding schemes in a dictionary like messageure:
+Example encodings: MALE:0.975; AGE:35.2; RACE:WHITE
+
+Typically populate only one of the following values: bytes, fvalue, ivalue, text pickle, json
+matrix vector image point rect xml*/
+
+message Attribute {
+	string key = 1;             // uid for this attribute
+	string description = 2;     // A text description on the content or type hint
+	BriarDataType type = 15;
+	bytes buffer = 3;
+	float fvalue = 4;
+	int32 ivalue = 5;
+	string text = 6;
+	bytes pickle = 7;
+	bytes json = 8;
+	BriarMatrix matrix = 9;
+	BriarVector vector = 10;
+	BriarMedia media = 11;
+	BriarPoint2D point = 12;
+	BriarRect rect = 13;
+	bytes xml = 14;
+};
+
+message FrameMetadata {
+    repeated Attribute attributes = 1;
+}
+
+message MediaMetadata {
+    repeated Attribute attributes = 1; // metadata describing the full media object
+    repeated FrameMetadata frame_metadata = 2; // metadata objects associated at a frame by frame level
+}
+
+
+message Detection {
+	// Data relating to the detection of an object in an image.  Tracklet_id should be associate with a single person which may contain multiple detections for many modalities (head, body, hands, etc) and result in a single multimodal template.  
+    
+	float confidence = 1;                   // RECOMMENDED: Confidence of detection
+    BriarRect location = 2;                 // REQUIRED: Bounding Box of detection
+    int32 frame = 3;                        // RECOMMENDED: Frame number associated with the detection
+    int64 detection_id = 4;                 // RECOMMENDED: unique id of detection
+    int64 tracklet_id = 5;                  // RECOMMENDED: the id of a tracklet for this media
+    string detection_class = 6;             // DEPRICATED: use modality or attributes instead
+    BiometricModality modality = 10;        // RECOMMENDED: modality associated with this detection.
+	repeated Attribute attributes = 7;      // OPTIONAL: attributes describing the detection
+	BriarMedia mask = 8;					// DEPRICATED: use attributes instead - a mask pertaining to the segmented object detected
+	BriarMedia media = 9;					// DEPRICATED: use attributes instead - data pertaining to the detection (i.e. an optional image)
+};
+
+// Represents a time-wise track of a detected instance
+message Tracklet {
+		repeated Detection detections =1 ; // REQUIRED: the set of detections defining the tracklet
+		repeated Attribute attributes = 2; // OPTIONAL: attributes describing the tracklet
+		string tracklet_class = 3; 				 // DEPRICATED: use modality or attributes instead. defines type of tracklet (body, face, features, etc...)
+		int64 tracklet_id = 4; 						 // the id of a tracklet for this media
+		TrackingOptions options = 5;			 // OPTIONAL: persistent options used to call the tracker
+}
+
+// Configuration for the detection algorithm
+message DetectionOptions {
+	StringOption algorithm_id = 1;            // uid corresponding to which algorithm to use
+	BoolOption   best = 2;                    // only respond with the best candidates
+	FloatOption  face_threshold = 3;          // min score for candidate consideration
+	FloatOption  body_threshold = 4;          // min score for candidate consideration
+	
+	IntOption    face_min_height = 5;         // min size for a face detection to be considered
+	IntOption    body_min_height = 6;         // min size for a body detection to be considered
+	IntOption		 detect_batch = 7;		  		// batch size for detection processes
+	BoolOption   enable_metadata = 8;         // extract additional metadata and attributes (landmarks, pose, demographics, etc)
+	BoolOption   debug = 9;                   // Save or print more info on the server side
+	BoolOption	 return_media = 10;			  // Should we return media (e.i. cropped images) related to the detections back to the client?
+	TrackingOptions tracking_options = 11;    // Configure tracking
+	BiometricModality modality = 12;		  // Whether detection is for face or whole body
+	repeated Attribute attributes = 13;       // Used for passing algorithm specific or custom options
+};
+
+// Configuration for the tracking algorithms
+message TrackingOptions {
+	StringOption algorithm_id = 1; // uid corresponding to which algorithm to use
+	BoolOption tracking_disable = 2;     // min score for candidate consideration
+	FloatOption threshold = 3;     // min score for candidate consideration
+	IntOption		 tracking_batch = 4;						// batch size for tracking processes
+    // FloatOption encoding = 4;
+	BoolOption return_media = 5;						// Should we return media (e.i. cropped image set) related to the tracklets back to the client?
+	BiometricModality modality = 6;						// Whether tracking is for face or whole body
+	repeated Attribute attributes = 7;    // Used for passing algorithm specific or custom options
+}
+
+// Configuration for the detection algorithm
+message EnhanceOptions {
+	StringOption algorithm_id = 1;            // uid corresponding to which algorithm to use
+	BoolOption	 return_media = 2;						// Should we return media (e.i. cropped images) related to the detections back to the client?
+	IntOption		 enhance_batch = 3;						// batch size for enhancement processes
+	BiometricModality modality = 4;						// Whether detection is for face or whole body
+	repeated Attribute attributes = 5;       // Used for passing algorithm specific or custom options
+};
+
+// Options to extract a detected subject from an image
+message ExtractOptions {
+	StringOption algorithm_id = 1;
+
+	BoolOption debug = 2; // Save or print more info on the server side
+	ExtractFlags flag = 3;			    // Flags to allow for auto-detection
+	IntOption		 extract_batch = 4;						// batch size for extraction processes
+	BiometricModality modality = 5; // Specifies extraction for a specific modality (i.e. face or whole body)
+	BoolOption	 return_media = 6;						// Should we return media (e.i. cropped images) related to the detections back to the client?
+	repeated Attribute attributes = 7; // Used for passing algorithm specific options
+
+};
+
+
+// ----------------------------------------------------------------------------
+// Data
+
+// Enumeration for data types used by Briar
+enum BriarDataType {
+    EMPTY = 0;
+    STRING = 1;
+    INT = 2;        // stored as string
+    FLOAT = 3;      // stored as string
+    BYTES = 4;      // raw data
+    VECTOR = 5;     // floating point values seperated by commas
+    PICKLE = 6;
+    XML = 7;
+    JSON = 8;
+		MATRIX = 9;
+		MEDIA = 11;
+		POINT = 12;
+		RECT = 13;
+		BUFFER = 14;
+}
+
+// ----------------------------------------------------------------------------
+// Feature Recognition
+
+// Enumeration used for the score types used by Briar
+// TODO: Probably not needed for now
+//enum BriarScoreType{
+//	CUSTOM = 0;
+//	L1 = 1;
+//	L2 = 2;
+//	NEG_DOT = 3;
+//};
+
+// messages
+// Landmarks such as facial features detected by Briar
+//message BriarLandmark_delete {
+//	string landmark_id = 1;     // Uid of landmark
+//	BriarPoint2D location = 2;  // Point location of landmark
+//};
+
+// Data structure to keep image data and detections together
+message TemplateImageInput {
+	BriarMedia im = 1;
+	repeated BriarRect detections = 2;
+};
+
+
+message TemplateData {
+	// Mapping item to store a simple part of multipart/multimodal templates.  The message contains mostly optional header and then algorithms will typically use just one data format (buffer, matrix, vector, etc.) to encode the associated signature data. Attributes can be used to store additional data as needed, i.e. yaw_angle, pitch_angle, resolution.
+
+    string key = 1;             	  // REQUIRED: unique id for this data
+    string description = 2;     	  // OPTIONAL: A text description on the content or type hint
+	BiometricModality modality = 15;  // RECOMMENDED: Biometric signature captured in the template
+	string submodality = 16; 		  // OPTIONAL: more detail on the type of modality or signature if needed
+	string source_id = 17;            // OPTIONAL: Link back to the media source of this data
+	string tracklet_id = 18;          // OPTIONAL: Link back to the tracklet or detection associated with this data
+	repeated Attribute metadata = 19; // OPTIONAL: Unstructured mapping to store additional data about the record as needed.
+
+//	bytes buffer = 3;
+//	float fvalue = 4;
+//	int32 ivalue = 5;
+//	string text = 6;
+//	bytes pickle = 7;
+//	bytes json = 8;
+//	BriarMatrix matrix = 9;
+//	BriarVector vector = 10;
+//	BriarMedia media = 11;
+//	BriarPoint2D point = 12;
+//	BriarRect rect = 13;
+//	bytes xml = 14;
+};
+
+message Template {
+	// Data structure to hold signature generated from an extraction. Typically just populate one of "parts", "data", or "buffer".
+    
+	string id = 4;                   // REQUIRED: String identifier associated with template.	
+	string algorithm = 3;            // OPTIONAL: Document which algorithm or machine learning model was used to create the signature vector.
+	repeated TemplateData parts = 5; // RECOMMENDED: Mapping to store multipart or multiple modality templates.
+	BriarVector data = 1;            // OPTIONAL: Simple templates can use a standard floating point feature vector.
+	bytes buffer = 2;                // OPTIONAL: General storage.  Can be used for raw binary data templates or proprietary formats.
+	repeated Attribute metadata = 6; // OPTIONAL: Unstructured mapping to store additional data about the record as needed.
+};
+
+// List of template
+message TemplateList {
+    repeated Template tmpls = 1;   // List of Templates
+};
+
+// List of List of templates
+message TemplateListGroup {
+    repeated TemplateList group = 1;   // List of List of templates
+};
+
+
+message Record {
+	// DEPRICATED, FOR LEGACY SYSTEMS ONLY Records are used to connect related information about media or a subject that is stored in a database.  Its structure may change in future API releases.
+	// This object is intened to hold information that is generally useful to humans.  The intension is that it will allow a GUI or similar tool to display basic inforamtion about the data base entry. For example, it would link an enrollment for a subject back to a passport like photo, name and other information.
+	// Ideally it should also support linking back to the source media, detection and tracking info, and other data that could be used to better understand how the media was processed.  Example: display source video with overlayed bounding boxes.
+	BriarDatabase database_id = 1;		// REQUIRED: database associated with this record
+	string entry_id = 2;               // REQUIRED: database entry associated with this record
+	EntryType entry_type = 3;			// REQUIRED: Type of entry, either 'subject' or 'media'
+
+	string subject_id = 4;              // OPTIONAL: ID of subject this record belong.  Leave blank if unknown.
+	string name = 5;                    // OPTIONAL: Name of the subject. Subject may be unknown.
+	string media_id = 17;
+	string source = 15;
+	BiometricModality modality = 16;
+	repeated string source_id = 6;      // RECOMENDED: A list of source ids associated with this entry.
+	
+	string algorithm = 7;               // OPTIONAL: Algorithm used to create the subject's templates
+	
+	string notes = 8;                   // OPTIONAL: Additional notes about the subject or the media
+
+	map<string, BriarMedia> media_previews = 9;	// OPTIONAL: A small set of images representing the raw media. Example: a few low resolution frames.
+	map<string, BriarMedia> subject_previews = 10; // OPTIONAL: small previews that could be displayed for GUIs or manual verification of a subject.  Example: similar to mugshots or passport photos.
+	Detection detection =14;
+	string templates = 11; // OPTIONAL: A list of template ids associated with this entry.
+	string tracklets = 12; // OPTIONAL: A list of tracklet_ids associated with this entry.
+	
+	repeated Attribute attributes = 13;	// OPTIONAL: Additional data about the record
+};
+
+message RecordList {
+	// DEPRICATED: records are not used at this time.
+	
+	repeated Record records = 1;  // List of records
+};
+
+// I/O
+// messages
+
+// ----------------------------------------------------------------------------
+// Enrollment
+
+// messages
+
+// The data type of the feature vector returned by template_get_feature_vector
+enum FeatureVectorType {
+    BriarInt8 = 0;
+    BriarInt16 = 1;
+    BriarInt32 = 2;
+    BriarInt64 = 3;
+
+    BriarUInt8 = 4;
+    BriarUInt16 = 5;
+    BriarUInt32 = 6;
+    BriarUInt64 = 7;
+
+    BriarFloat = 8;
+    BriarDouble = 9;
+};
+
+
+// ----------------------------------------------------------------------------
+// Verification
+
+// messages
+
+// Information about a match
+message SearchMatchInfo {
+	float score = 1;            	// Match Similarity
+	float theoretical_min = 2; 		// OPTIONAL: the minimum score that the algorithm can return
+	float theoretical_max = 3;  	// OPTIONAL: the maximum score the algorithm can return
+	string subject_id_probe = 4;    // REQUIRED FOR EVALUATION: subject ID of probe image (if known)
+	string subject_id_gallery = 5; // REQUIRED: subject ID of matched gallery subject
+	string entry_id_probe = 8;		// REQUIRED FOR EVALUATION: the database entry id of the probe
+	string entry_id_gallery = 9; // REQUIRED FOR EVALUATION: the database entry id of the gallery
+
+	string media_id = 6;        //OPTIONAL: ID of media that probe matched to
+	string subject_name = 7;    // Name of subject
+
+	BriarMedia face = 11;        // OPTIONAL: Image of face
+	BriarMedia body = 12;        // OPTIONAL: Image of Body
+	BriarMedia gate = 13;        // OPTIONAL: Image(s) of gait
+};
+
+message VerifyMatchInfo {
+	float score = 1;            // Match Similarity
+	float theoretical_min = 2; 	// OPTIONAL: the minimum score that the algorithm can return
+	float theoretical_max = 3;  // OPTIONAL: the maximum score the algorithm can return
+	string subject_id_verify = 4; // REQUIRED FOR EVALUATION: subject ID of image to be verified (if known)
+	string subject_id_reference = 5; // REQUIRED: subject ID of reference image matched against
+	string entry_id_reference = 6; // REQUIRED FOR EVALUATION: the database entry id of the reference image
+	string entry_id_verification = 7; // REQUIRED FOR EVALUATION: the database entry id of the gallery
+
+	string media_id = 8;        // OPTIONAL: ID of media that probe matched to
+	string subject_name = 9;    // OPTIONAL: Name of subject
+
+	BriarMedia face = 10;        // OPTIONAL: Image of face
+	BriarMedia body = 11;        // OPTIONAL: Image of Body
+	BriarMedia gate = 12;        // OPTIONAL: Image(s) of gait
+};
+
+// List of matches
+message SearchMatchList {
+	repeated SearchMatchInfo match_list = 1; // REQUIRED: List of search matches in SORTED ORDER
+};
+
+// List of matches
+message VerifyMatchList {
+	repeated VerifyMatchInfo match_list = 1; // List of verification matches
+};
+
+// ----------------------------------------------------------------------------
+// Gallery
+
+// messages
+
+// Stores images/detections/feature_vectors together in a searchable/referenceable data structure
+message BriarDatabase {
+    // TODO: Gallery is implemented on the server but we have to completely populate the API it can be simple though: "name". No templates need to be tracked here.
+    // Leave this empty for performers to populate
+
+    // An identifier for the gallery
+    string name = 1;
+}
+
+// A message used for reporting information about a specific database
+message BriarDatabaseInfo {
+	string name = 1;											// REQUIRED: database name
+	int64 entry_count = 2;								// REQUIRED: number of entries in the database
+	int64 template_count = 3;							// REQUIRED: number of unique templates in the database (could be larger than number of entries)
+	int64 failed_enrollment_count = 4;		// REQUIRED: number of failed enrollments into the database
+	float total_database_size = 5;				// REQUIRED FOR EVALUATION: size of database in KB
+	float average_entry_size = 6;					// REQUIRED FOR EVALUATION: average size of an entry in KB
+	repeated BiometricModality modalities = 9;				// OPTIONAL: modality of the database (could be multiple if the database includes multiple modalities)
+	repeated Attribute attributes = 10;		// OPTIONAL: other attributes that may be custom to a performers
+	repeated float entry_sizes = 11; 			// REQUIRED FOR EVALUATION: return the stored size of each entry in the database (KB)
+}
+
+// A message representing a list of unique template ids.
+message TemplateIds {
+    repeated string ids = 1;    // List of unique ids relating to the templates
+    int32 length = 2;           // DEPRICATED: not needed in protobuf. Number of ids
+};
+
+// ----------------------------------------------------------------------------
+// Cluster
+
+// messages
+
+// A message to represent a list of cluster ids objects.
+message ClusterIds {
+    repeated string ids = 1;    // List of ids to cluster
+};
+
+// A messageure to represent a list of cluster confidence objects.
+message ClusterConfidence {
+    double confidences = 1;     // Confidence of the cluster
+};
+
+
+// ----------------------------------------------------------------------------
+// Analytics messages
+
+message BriarDuration {
+	double start = 1; //start time of process in Seconds Since the Epoch (SSTE)
+	double end = 2; //start time of process in Seconds Since the Epoch (SSTE)
+}
+
+// Data structure to contain timing information for BRIAR functions. All timing information is in microseconds
+message BriarDurations {
+	BriarDuration client_duration_file_level = 1; //This will always be populated with the duration taken by the BRIAR API client for the file-level operations
+	BriarDuration client_duration_frame_level = 2; //This will always be populated with the duration taken by the BRIAR API client for the frame-level operations
+	BriarDuration grpc_outbound_transfer_duration = 3; //This will always be populated by the duration taken to perform the outbound API request across the gRPC channel
+	BriarDuration grpc_inbound_transfer_duration = 4; //This will always be populated by the duration taken to perform the inbound API data response across the gRPC channel
+	BriarDuration service_duration = 5;
+	map<string, BriarDuration> sub_durations = 6; //A list of timings of subroutines within a function
+	BriarDuration total_duration = 7; //The total time in microseconds it took to execute the function
+}
+
+message BriarDurationsList {
+	repeated BriarDurations durations_list = 1;
+}

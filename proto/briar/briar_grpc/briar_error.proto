@@ -1,0 +1,56 @@
+/*
+ * License
+ */
+
+
+syntax = "proto3";
+
+option csharp_namespace="briar.BriarGrpc";
+
+package briar;
+
+// Enum to define the different Briar error codes
+enum BriarError {
+    BRIAR_SUCCESS = 0                    ; // No error
+    BRIAR_UNKNOWN_ERROR = 1              ; // Catch all error code
+    BRIAR_INTERNAL_ERROR = 2             ; // An internal SDK error was encountered
+    BRIAR_OUT_OF_MEMORY = 3              ; // Out of memory error
+    BRIAR_INVALID_SDK_PATH = 4           ; // Invalid SDK location
+    BRIAR_BAD_SDK_CONFIG = 5             ; // Invalid SDK configuration
+    BRIAR_BAD_LICENSE = 6                ; // Incorrect license file
+    BRIAR_MISSING_DATA = 7               ; // Missing SDK data
+    BRIAR_INVALID_GPU = 8                ; // The GPU is not functioning
+    BRIAR_BAD_ARGUMENT = 9               ; // An argument to a BRIAR function is invalid
+    BRIAR_OPEN_ERROR = 10                ; // Failed to open a file
+    BRIAR_READ_ERROR = 11                ; // Failed to read from a file
+    BRIAR_WRITE_ERROR = 12               ; // Failed to write to a file
+    BRIAR_PARSE_ERROR = 13               ; // Failed to parse a file
+    BRIAR_INVALID_MEDIA = 14             ; // Failed to decode a media file
+    BRIAR_OUT_OF_BOUNDS_ACCESS = 15      ; // Out of bounds access into a buffer
+    BRIAR_MEDIA_AT_END = 16              ; // Media object is at the end of its data
+    BRIAR_INVALID_ATTRIBUTE_KEY = 17     ; // An invalid attribute key was provided
+    BRIAR_MISSING_ATTRIBUTE = 18         ; // A value for a valid attribute key is not present
+    BRIAR_DUPLICATE_ID = 19              ; // Template id already exists in a gallery
+    BRIAR_MISSING_ID = 20                ; // Template id can't be found
+    BRIAR_MISSING_FILE_NAME = 21         ; // An expected file name is not given
+    BRIAR_INCORRECT_ROLE = 22            ; // Incorrect template role
+    BRIAR_FAILURE_TO_SERIALIZE = 23      ; // Could not serialize a data structure
+    BRIAR_FAILURE_TO_DESERIALIZE = 24    ; // Could not deserialize a data structure
+    BRIAR_BATCH_ABORTED_EARLY = 25       ; // Batch call aborted early due to error
+    BRIAR_BATCH_FINISHED_WITH_ERRORS = 26; // Batch call finished, but with errors
+    BRIAR_CALLBACK_EXIT_IMMEDIATELY = 27 ; // Callback error indicating processing should stop immediately
+    BRIAR_NOT_IMPLEMENTED = 28           ; // Optional function return
+    BRIAR_NUM_ERRORS = 29                ; // Utility to iterate over all errors
+};
+
+// List of errors
+message BriarErrors {
+    repeated BriarError errors = 1;     // Error codes
+    int32 length = 2;                   // Number of Error codes
+};
+
+// Human readable Error message with code
+message BriarErrorMessage {
+	int32 error_code = 1;       // Error Code
+	string error_message = 2;   // Human readable string
+}

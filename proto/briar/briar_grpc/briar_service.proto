@@ -1,0 +1,577 @@
+/*
+* License
+*/
+
+
+syntax = "proto3";
+
+option csharp_namespace="briar.BriarGrpc";
+
+package briar;
+
+import "briar/briar_grpc/briar_error.proto";
+import "briar/briar_grpc/briar.proto";
+
+
+// BRAIR solutions will be implemented as gRPC services.  gRPC provides a well
+// defined network interface that allows light-weight clients to submit requests
+// to heavy-weight servers that are running BRIAR algorithms.  Solutions on both
+// the client and server side may be implemented on many hardware platforms and
+// in many common programming languages allowing flexibility in how solutions are
+// implemented.
+//
+// When compiled the BRIAR API protobuf specification will produce server and
+// client stubs.  On the server side solutions will have to implement functions
+// to process detections, enrollments, searches, verifications, and database
+// management functions.  These functions will be exposed through a single
+// network port which allows containerizing the solutions and starting up the
+// service relatively straight forward.
+//
+// Client side interfaces will allow easy connections to the service.  Stubs
+// are provide that will allow remote function calls where the generated code
+// will handle the details of format and transmitting function requests and
+// responses.  gRPC also provides support for additional capabilities such as
+// non-blocking asynchronous calls as well as the ability to stream data to
+// and from the service.
+service BRIARService{
+
+    // REQUIRED Check service status.  After connecting clients should typically
+    // call this function to insure that the service is in the READY
+    // state.
+    rpc status(StatusRequest) returns (StatusReply){};
+
+    // REQUIRED Run detection on a media.  Optionally this can also run attribute
+    // classification and template extraction.  Implementation should be similar
+    // to enroll but with nothing stored in a database.
+    rpc detect(stream DetectRequest) returns (stream DetectReply){};
+
+    //OPTIONAL To run tracking on video media.
+
+		rpc track(stream TrackRequest) returns (stream TrackReply){};
+    // REQUIRED Run feature extraction on the provided detection.
+    rpc extract(stream ExtractRequest) returns (stream ExtractReply){};
+
+    // REQUIRED FOR PHASE 1 EVALUATION Detect and extracts templates from media and enrolls the results in a database
+    rpc enroll(stream EnrollRequest) returns (stream EnrollReply){};
+
+    // REQUIRED Compare two template ids and verify if they are the same person.
+    rpc verify(stream VerifyRequest) returns (VerifyReply){};
+
+    // REQUIRED Use provided template ids to search a database for that person.  Return
+    // a rank ordered list of results with scores.
+    rpc search(stream SearchRequest) returns (stream SearchReply){};
+
+    // OPTIONAL Cluster templates in an unstructured database to group templates by identity.
+    rpc cluster(ClusterRequest) returns (ClusterReply){};
+
+    // OPTIONAL Enhance a media stream. This takes a media stream as an input and return a media stream of enhanced video.
+    rpc enhance(stream EnhanceRequest) returns (stream EnhanceReply){};
+
+    // REQUIRED Create and initialize a database on the server.  This should prepare the
+    // database to receive enrollment requests.
+    rpc database_create(DatabaseCreateRequest) returns (DatabaseCreateReply){};
+
+    // REQUIRED FOR PHASE 1 EVALUATION Merge a set of databases into a single database.
+    rpc database_merge(DatabaseMergeRequest) returns (DatabaseMergeReply){};
+
+    // REQUIRED Rename a database on the server.  This should rename the database.
+    rpc database_rename(DatabaseRenameRequest) returns (DatabaseRenameReply){};
+
+    // REQUIRED Delete a database on the server.  This should remove the database and remove associated storage.
+    rpc database_delete(DatabaseDeleteRequest) returns (DatabaseDeleteReply){};
+
+    // REQUIRED Load database by name onto the server running the service.
+    rpc database_load(DatabaseLoadRequest) returns (DatabaseLoadReply){};
+
+    // OPTIONAL Clients can retrieve templates with metadata from a database for client side storage, processing, backup, or for database management.
+    rpc database_retrieve(stream DatabaseRetrieveRequest) returns (stream DatabaseRetrieveReply){};
+
+    // OPTIONAL Clients can insert templates directly into a database for database management purposes.
+    rpc database_insert(DatabaseInsertRequest) returns (DatabaseInsertReply){};
+
+    // REQUIRED FOR PHASE 1 EVALUATION List the names of the galleries on this service.
+    rpc database_list(DatabaseListRequest) returns (DatabaseListReply){};
+
+    // REQUIRED FOR PHASE 1 EVALUATION List the enrollments and associated metadata in the database.
+    rpc database_list_entries(DatabaseListEntriesRequest) returns (DatabaseListentriesReply){};
+
+    // REQUIRED FOR PHASE 1 EVALUATION Return the associated summary information of a specific database.
+		rpc database_info(DatabaseInfoRequest) returns (DatabaseInfoReply) {};
+
+    // REQUIRED Templates and associated records are deleted from a database.
+    rpc database_remove_templates(DatabaseRemoveTmplsRequest) returns (DatabaseRemoveTmplsReply) {};
+
+		// OPTIONAL will save a database's progress without finalizing
+		rpc database_checkpoint(DatabaseCheckpointRequest) returns (DatabaseCheckpointReply) {};
+    // REQUIRED Called after all individuals have been enrolled.  Conduct any analysis
+    // of the database entries as needed or optimize for fast verification or search.
+    rpc database_finalize(DatabaseFinalizeRequest) returns (DatabaseFinalizeReply){};
+
+    // REQUIRED FOR PHASE 1 EVALUATION Given two database names compute a set of search results of size ProbeDatabase X Search Rank.
+    // The matrix may be used for testing, analysis, client side clustering, etc.
+    // This may needed to be implemented to support evaluations in the future.
+    rpc database_compute_search(SearchDatabaseRequest) returns (SearchDatabaseReply){};
+
+		 // REQUIRED FOR PHASE 1 EVALUATION Given two database names compute a score matrix of size databaseA X databaseB.
+    // The matrix may be used for testing, analysis, client side clustering, etc.
+    // This may needed to be implemented to support evaluations in the future.
+		rpc database_compute_verify(VerifyDatabaseRequest) returns (VerifyDatabaseReply){};
+}
+
+	
+message Empty {} // Used as a place holder or to indicate no value.
+
+message DatabaseListRequest{
+	string regex = 1;
+}
+
+message DatabaseListReply {
+	repeated string database_names = 1;
+}
+
+message DatabaseInfoRequest {
+	string database_name = 1; //REQUIRED Name of the database to retrieve info for
+	BriarDurations durations = 2; // Log the time needed to complete the request on the server
+}
+
+message DatabaseInfoReply {
+	BriarDatabaseInfo info = 1; //REQUIRED Contains the information about the database
+	BriarDurations duration = 2; // Log the time needed to complete the request on the server
+	bool exists = 3;			// REQUIRED: set to true if the requested database exists and the reply is populated correctly
+}
+
+message DatabaseListEntriesRequest{
+	string database_name = 1; //REQUIRED database name
+	BriarDurations durations = 2; // Log the time needed to complete the request on the server
+}
+
+message DatabaseListentriesReply {
+	repeated string entry_ids = 1;			//REQUIRED List of entry IDs for the given database
+	repeated FrameMetadata entry_attributes = 2;  //List of attributes for each entry
+	BriarDurations durations = 3;      //Duration of retrieving entries
+	bool exists = 4;							//Flag defining if the requested database exists
+}
+
+// Request status on the service.  This is currently an empty message.
+message StatusRequest { }
+
+// Returns basic status and information on the service and its version 
+// as well as additional options and features supported.
+message StatusReply{
+
+	string developer_name = 1; // REQUIRED: The name of the developer of the service.
+
+
+	string service_name = 2; // REQUIRED: The name of the service software.
+
+
+	APIVersion version = 3;// REQUIRED: The specific version for this service.
+
+
+	APIVersion api_version = 6; // REQUIRED: The specific version for this service.
+
+
+	BriarServiceStatus status = 4; // REQUIRED: Used to communicate the status of the service.  This should typically return READY.
+
+
+	// Optional features or options that can be communicated to clients.  
+	// This could communicate prefereces or settings for the service and 
+	// additional metadata.
+	repeated Attribute configuration = 5; 
+}
+
+message DatabaseCreateRequest {
+	BriarDatabase database = 1;   		//REQUIRED: Name of database to create
+	TemplateList tmpls = 2;    		//OPTIONAL: Templates to create database from
+	BriarDurations durations = 4; // Log the time needed to complete the request on the server
+
+}
+
+message DatabaseCreateReply {
+	TemplateIds ids = 1;		// OPTIONAL: template IDs that new database has been created with
+	BriarDurations durations = 2;   // Log the time needed to complete the request on the server
+	BriarErrors errors = 3;
+}
+
+message DatabaseCheckpointRequest {
+	BriarDatabase database = 1;   		// REQUIRED: Name of database to create
+	BriarDurations durations = 4; // Log the time needed to complete the request on the server
+	BriarErrors errors = 3;
+}
+
+message DatabaseCheckpointReply {
+	BriarDurations durations = 2;   // Log the time needed to complete the request on the server
+	BriarErrors errors = 3;
+	bool exists = 4;			// REQUIRED: set to true if the requested database exists and the reply is populated correctly
+
+}
+
+message DatabaseLoadRequest {
+	BriarDatabase database = 1;   		// Name of database to load
+	BriarDurations durations = 2; // Log the time needed to complete the request on the server
+
+}
+
+message DatabaseLoadReply {
+	TemplateIds ids = 1;  // OPTIONAL: template IDs included in the loaded database
+	RecordList records = 2; // DEPRICATED: records are not used at this time.
+	BriarDurations durations = 3;   // Log the time needed to complete the request on the server
+	BriarErrors errors = 4;
+	bool exists = 5;		//REQUIRED: Set to false if the requested database did not exist
+
+}
+
+message DatabaseInsertRequest {
+	BriarDatabase database = 1;  // OPTIONAL: Database to batch insert into
+	TemplateList tmpls = 2;    // OPTIONAL: Templates to insert
+	TemplateIds ids = 3;       // OPTIONAL: IDs of templates to insert
+	BriarDurations durations = 4; // OPTIONAL: Log the time needed to complete the request on the server
+
+}
+
+message DatabaseInsertReply {
+	TemplateIds ids = 1;	// OPTIONAL: Database ids of the templates
+	BriarDurations durations = 2;   // OPTIONAL: Log the time needed to complete the request on the server
+	BriarErrors errors = 3;
+	bool exists = 4;		// OPTIONAL: REQUIRED: Set to false if the requested database did not exist
+
+}
+
+message DatabaseRemoveTmplsRequest {
+    BriarDatabase database = 1;   // UNIMPLEMENTED: Database to remove from
+    TemplateIds ids = 2; // UNIMPLEMENTED:
+    BriarDurations durations = 3; // UNIMPLEMENTED: Log the time needed to complete the request on the server
+}
+
+message DatabaseRemoveTmplsReply {
+	BriarDurations durations = 1; // UNIMPLEMENTED:
+	BriarErrors errors = 2;		// UNIMPLEMENTED: Aggregate errors which happened mid-batch
+}
+
+message DatabaseMergeRequest {
+		repeated BriarDatabase database_list = 1;  // REQUIRED: Databases to merge
+		BriarDatabase output_database   = 2;		// REQUIRED: Database to output
+		BriarDurations durations = 3; // Log the time needed to complete the request on the server
+}
+
+message DatabaseMergeReply {
+		BriarDurations durations = 1;
+		int64 entry_count = 2;  // REQUIRED: number of entries in the newly merged database
+		repeated bool exists = 4;		// REQUIRED: Set to false if the requested database did not exist
+}
+
+message DatabaseDeleteRequest {
+    BriarDatabase database = 1;   // REQUIRED: Database to remove from
+		BriarDurations durations = 2; // Log the time needed to complete the request on the server
+
+}
+
+message DatabaseDeleteReply {
+	BriarDurations durations = 1;
+	int64 entry_count = 2;    // REQUIRED: The number of entries deleted in the database
+	BriarErrors errors = 3;		// Aggregate errors which happened mid-batch
+	bool exists = 4;		// REQUIRED: Set to false if the requested database did not exist
+}
+
+
+message DatabaseRenameRequest {
+    BriarDatabase database = 1;   // REQUIRED: Database to remove from
+		BriarDatabase database_new = 2;   // REQUIRED: Database to remove from
+}
+
+message DatabaseRenameReply {
+	BriarDurations durations = 1;
+	BriarErrors errors = 3;		// Aggregate errors which happened mid-batch
+	bool exists = 2; 					// REQUIRED: Set to false if the requested database did not exist
+}
+
+message DetectRequest {
+	BriarMedia media = 1;                       // The video media to detect from
+	int32 frame = 2;                            // What frame of the video this is
+	string subject_id = 3;                          // ID of subject this detection will belong to
+	string media_id = 4;                            // ID of media this detection will belong to
+//	string entry_id = 3;                      // Optional unique id of subject the video
+	EntryType entry_type = 5;									// Either 'subject' or 'media'
+	string entry_name = 6;                    // Optional name of subject in the video
+	BriarDurations durations = 7; 						// Log the time needed to complete the request on the server
+	DetectionOptions detect_options = 8;   	    // Hyperparameters to run the detection with
+}
+
+message DetectReply {
+	// TODO: Fill in responses here.  Tracks, Optional Attributes, Optional Templates
+	repeated Detection detections = 1;	// REQUIRED: Detections generated by detect
+	BriarDurations durations = 2;       // REQUIRED: Log the time needed to complete the request on the server
+	int64 frame_id = 3;                 // REQUIRED: The id of the media frame associated with the detections.
+	BiometricModality modality = 4;  // OPTIONAL: the modality detected
+	BriarErrors errors = 5;
+	BriarProgress progress = 6;		//OPTIONAL: provides progress updates for progress bar display. See example code for details
+	BriarMedia reference_media = 7;  // OPTIONAL: put reference media here to return it to the API. This will slow down your API reply and is not currently used by the CLI
+}
+
+message TrackRequest {
+	BriarMedia media = 1;                       // The video media to detect from
+	string subject_id = 3;                      // Optional unique id of subject the video
+	string subject_name = 4;                    // Optional name of subject in the video
+	BriarDurations durations = 5; 							// Log the time needed to complete the request on the server
+	DetectionOptions detect_options =6;  				// Hyperparameters to run the detection with
+}
+
+message TrackReply {
+		repeated Tracklet tracklets = 1; // REQUIRED: set of returned tracklets
+		BriarDurations durations = 2;
+		repeated int64 frame_ids = 3; // OPTIONAL: the frame IDs associated with the tracklets
+		BiometricModality modality = 5; // OPTIONAL: the modality of the track extracted
+			BriarProgress progress = 6;		//OPTIONAL: provides progress updates for progress bar display. See example code for details
+		BriarErrors errors = 7;
+}
+
+message ExtractRequest {
+	BriarMedia media = 1;				// Image to extract features from
+	BriarDurations durations = 2; // Log the time needed to complete the request on the server
+	repeated Detection detections = 3;	// Detections to extract features from
+	DetectionOptions detect_options = 4;  //Detection options
+	ExtractOptions extract_options = 5; //Extraction options
+}
+
+message ExtractReply {
+	repeated Template templates = 1;	// REQUIRED: Extracted features
+	int64 frame_id = 3;					// OPTIONAL: Id of the media frame associated with the extract
+	BriarDurations durations = 4;       // Log the time needed to complete the request on the server
+	BiometricModality modality = 5;		// OPTIONAL: the modality of the templates extracted
+	DetectReply detect_reply = 6;				// OPTIONAL: the detect reply associated with the extraction if the service is sending intermediate detection results back to the client
+	TrackReply track_reply = 7;				// OPTIONAL: the track reply associated with the extraction if the service is sending intermediate detection results back to the client
+	BriarErrors errors = 8;
+	BriarProgress progress = 9; //OPTIONAL: provides progress updates for progress bar display. See example code for details
+}
+
+// OPTIONAL: request that returns a databases contents to the client.  Could be very slow
+message DatabaseRetrieveRequest{
+    BriarDatabase database = 1;   // Database to retrieve from
+    TemplateIds ids = 2;
+    // Log the time needed to complete the request on the server
+	BriarDurations durations = 3;
+
+}
+
+message DatabaseRetrieveReply {
+		TemplateList templates = 1; // UNIMPLEMENTED
+
+		TemplateList records = 2;   // DEPRICATED: duplicate output.
+
+    BriarDurations durations = 3;   // UNIMPLEMENTED: Log the time needed to complete the request on the server
+		BriarErrors errors = 4;
+}
+
+message EnrollRequest {
+	BriarMedia media = 1;             // The image or video media to process
+	int32 frame = 2;                            // What frame of the video this is
+	BriarDatabase database = 3;         // The database to enroll into
+
+	// OPTIONAL unique id of the given input media.  If not provide a unique id
+	// should be assigned by the service: UNKNOWN_################.
+	string media_id = 4;
+	// OPTIONAL unique id of the given input subject within a media.  If not provide a unique id
+	// should be assigned by the service: UNKNOWN_################.
+	string subject_id = 5;
+
+	// OPTIONAL name of subject in the video.
+	string subject_name = 6;
+
+	// OPTIONAL Clients may provide a list of tracks from external algorithms 
+	// that should be used instead of internal detection algorithms.
+	repeated Tracklet tracks = 7;
+
+	// How to run the enrollement
+	EnrollFlags enroll_flag = 8;
+
+	// OPTIONAL user specified detection to extract image from
+	repeated Detection detections = 9;
+
+	// OPTIONAL User specified template to enroll bypasing detect and extract
+	Template template = 10;
+
+	Record record = 11; // DEPRICATED: records are not used at this time.
+
+	// Log the time needed to complete the request on the server
+	BriarDurations durations = 12;
+
+	// Hyperparameters to run the detection with
+	DetectionOptions detect_options = 13;
+
+	// Hyperparameters to run the extraction with
+	ExtractOptions extract_options = 14;
+
+	// How this is to be enrolled in the database
+	EnrollOptions enroll_options = 15;
+}
+
+message EnrollReply {
+		repeated Detection detections = 1;	// DEPRICATED: FOR LEGACY SYSTEMS ONLY. use detect_reply instead. Detections generated by auto-detect
+    BriarDurations durations = 2;       // Log the time needed to complete the request on the server
+		int64 frame_id = 3;                 // OPTIONAL: The id of the media frame associated with the detections.
+
+		DetectReply detect_reply = 4;				// OPTIONAL: A dectect reply to be populated if the service is sending intermediate detection results back to the client
+		TrackReply track_reply = 5;					// OPTIONAL: A track reply to be populated if the service is sending intermediate detection results back to the client
+		ExtractReply extract_reply = 6;			// OPTIONAL:An extract reply to be populated if the service is sending intermediate extraction results back to the client
+		BriarErrors errors = 7;
+		repeated EnrollmentInfo enrollments = 8;   		//OPTIONAL: Information about the enrollments
+		BriarProgress progress = 9; //OPTIONAL: provides progress updates for progress bar display. See example code for details
+}
+
+//Performs 1-to-1 Media Verification in a streaming paradigm (streams reference media in first, then streams in verification media
+message VerifyRequest {
+		BriarMedia media = 1; //REQUIRED Frames to be verified.
+		enum VerifyRole {
+			reference = 0;
+			verify = 1;
+		};
+		VerifyRole role = 2; //REQUIRED set this to "reference" for all reference input, and "verify" if if the given request contains media to be verified
+		repeated Detection detections = 3;		//OPTIONAL Reference Images
+    TemplateList reference_tmpls = 4;			//OPTIONAL Reference Templates
+    BriarDurations durations = 5;				// Log the time needed to complete the request on the server
+		DetectionOptions detect_options = 6; 	//REQUIRED options for detection
+		ExtractOptions extract_options = 7; //REQUIRED options for extraction
+		VerifyOptions verify_options = 8;		//REQUIRED options for verification
+		VerifyFlags flag = 9;						// flags to control whether to verify from templates, images, or detections+images
+}
+
+message VerifyReply {
+    VerifyMatchList similarities = 1;  // REQUIRED: Match list showing similarities
+    BriarDurations durations = 2;   // Log the time needed to complete the request on the server
+		DetectReply detect_reply = 4;				//OPTIONAL: A dectect reply to be populated if the service is sending intermediate detection results back to the client
+		ExtractReply extract_reply = 5;			//OPTIONAL: An extract reply to be populated if the service is sending intermediate extraction results back to the client
+		BriarErrors errors = 3;
+}
+
+message SearchRequest {
+    // There are three options on how to run a search.
+	// Selection 1) Supply probe media and search for any people detected.
+	// Selection 2) Supply previously extracted templates.
+	// Selection 3) Supply a previously extracted database and search for probes in that database.
+
+	BriarDatabase database = 4;   		    // REQUIRED: Database to search
+	BriarMedia media = 1;                   // SELECTION 1: Image to extract probe template from
+	repeated Detection detections = 2;      // OPTIONAL: Detection to extract probe template from
+	TemplateList probes = 3;                // SELECTION 2: Templates to search
+
+	DetectionOptions detect_options = 9;
+	ExtractOptions extract_options = 10;
+	SearchOptions search_options = 11;
+	BriarDurations durations = 8; // Log the time needed to complete the request on the server
+}
+
+message SearchDatabaseRequest {
+    // This is a search that takes a gallery database and a probe database, and searches all probes against the gallery
+
+	BriarDatabase database = 4;   		    // REQUIRED: Database to search
+	BriarDatabase probe_database = 7;       // REQUIRED: probe database to to use as probe entries, instead of a BriarMedia
+	repeated string probe_entry_ids = 12;   // OPTIONAL: the list of probe database entries to search.  If empty search the entire probe database.
+	SearchOptions search_options = 11;			// search options from the API call
+
+
+	BriarDurations durations = 8; // Log the time needed to complete the request on the server
+}
+
+message SearchReply {
+    repeated SearchMatchList similarities = 1; // REQUIRED: Return: List of similarities
+  	repeated Detection probe_detections = 2; // OPTIONAL: Return: In the case of multiple probes within a single image, A list of detection locations on the probe image that the matchlists belong to
+		BriarDurations durations = 3;   // Log the time needed to complete the request on the server
+
+		DetectReply detect_reply = 4;				//OPTIONAL: A detect reply to be populated if the service is sending intermediate detection results back to the client
+		ExtractReply extract_reply = 5;			//OPTIONAL: An extract reply to be populated if the service is sending intermediate extraction results back to the client
+
+		BriarErrors errors = 6;
+		BriarProgress progress = 7; //OPTIONAL: provides progress updates for progress bar display. See example code for details
+}
+
+message SearchDatabaseReply {
+    repeated SearchMatchList similarities = 1; // REQUIRED: Return: List of similarities in scored order
+//  	repeated Detection probe_detections = 2; //Return: In the case of multiple probes within a single image, A list of detection locations on the probe image that the matchlists belong to
+	// TemplateIds ids = 2;        // Return: List of matching template ids // This is stored in the similarities object
+    repeated BriarDurations durations = 3;   // Log the time needed to complete the request on the server
+	BriarErrors errors = 6;
+	BriarProgress progress = 7;		//OPTIONAL: provides progress updates for progress bar display. See example code for details
+}
+
+message VerifyDatabaseRequest {
+    // This is a search that takes a gallery database and a probe database, and searches all probes against the gallery
+
+	BriarDatabase reference_database = 4;   		    // REQUIRED: Database to search
+	BriarDatabase verify_database = 7;       // SELECTION 1: probe database to to use as probe entries, instead of a BriarMedia
+	repeated string probe_entry_ids = 12;   // OPTIONAL: the list of probe database entries to search.  If empty search the entire probe database.
+	VerifyOptions verify_options = 11;
+
+
+	BriarDurations durations = 8; // Log the time needed to complete the request on the server
+}
+
+message VerifyDatabaseReply {
+	BriarMatrix match_matrix = 9;						//Required: A match matrix instead of a Matchlist
+
+//	repeated string matrix_probe_entry_types = 10;
+//	repeated string matrix_gallery_entry_types = 11;
+	map<string, Detection> matrix_probe_detections = 12;		//Optional: A list of detections that correspond to all entries in the probe database
+	map<string, Detection> matrix_gallery_detections = 13;	//Optional: A list of detections that correspond to all entries in the gallery database
+	map<string, Tracklet> matrix_probe_tracklets = 14;				//Optional: A list of tracklets that correspond to all entries in the probe database
+	map<string, Tracklet> matrix_gallery_tracklets = 15;			//Optional: A list of tracklets that correspond to all entries in the gallery database
+	map<string, MediaMetadata> matrix_probe_attributes = 16;	//Optional: extra probe attributes
+	map<string, MediaMetadata > matrix_gallery_attributes = 17; //Optional: extra gallery attributes
+
+	BriarErrors errors = 6;
+	BriarProgress progress = 7;		// OPTIONAL: provides progress updates for progress bar display. See example code for details
+}
+
+message ClusterRequest {
+	BriarDatabase database = 1;                  // UNIMPLEMENTED: Run clustering on a database of templates to group templates by person
+	BriarDurations durations = 3; // UNIMPLEMENTED: Log the time needed to complete the request on the server
+};
+
+message ClusterReply {
+    repeated ClusterIds cluster_ids = 1;                // UNIMPLEMENTED:List of clustered ids
+    repeated ClusterConfidence cluster_confidences = 2; // UNIMPLEMENTED: List of the cluster confidences
+    BriarDurations durations = 3;                             // UNIMPLEMENTED: Log the time needed to complete the request on the server
+    BriarErrors errors = 4;                    // UNIMPLEMENTED: Indicate any errors or warnings.
+	BriarProgress progress = 5;		// UNIMPLEMENTED:: provides progress updates for progress bar display. See example code for details
+}
+
+message EnhanceRequest {
+    BriarMedia media = 1; 							//  The image or video to enhance.
+    repeated Attribute metadata = 2; 		// Metadata on the video to select enhancement parameters.
+    repeated Attribute options = 3; 		// Algorithm specific options.
+		int64 frame_id = 4; 								// The id of the media frame associated with the detections.
+		BriarDurations durations = 5; // Log the time needed to complete the request on the server
+		EnhanceOptions enhance_options = 6; //enhance options provided by the API
+};
+
+message EnhanceReply {
+		BriarMedia media = 1; // REQUIRED: The enhanced result.
+		BriarDurations durations = 2; // Log the time needed to complete the request on the server
+		BriarProgress progress = 3;		//OPTIONAL: provides progress updates for progress bar display. See example code for details
+		BriarErrors errors = 4; // Indicate any errors or warnings.
+}
+
+message DatabaseFinalizeRequest {
+		BriarDatabase database = 1; // The database to optimize
+}
+
+message DatabaseFinalizeReply {
+    BriarDurations durations = 1; // Log the time needed to complete the request on the server
+		BriarErrors errors = 2; // Indicate any errors or warnings.
+		bool exists = 3;			// REQUIRED: set to true if the requested database exists and the reply is populated correctly
+}
+
+// TODO: This works well for FaRO but do we need it for BRIAR?
+//message BriarServiceInfo_delete {
+//    BriarServiceStatus status = 1;      // Current state of the service
+//    int32 worker_count = 2;             // Number of threads service is running
+//    bool detection_support = 3;         // Can do detections?
+//    bool extract_support = 4;           // Can do extractions?
+//    bool score_support = 5;             // Can calculate scores?
+//    bool attribute_support = 6;         // Can generate attributes?
+//    //BriarScoreType score_type = 7;      // The type of score generated
+//    float detection_threshold = 8;      // Min confidence to provide detections
+//    float match_threshold = 9;          // Min confidence to provide matches
+//    string algorithm = 10;              // Algorithm used for matching
+//    string notes = 11;                  // Additional notes about the service
+//};
+
