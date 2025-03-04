@@ -1,9 +1,8 @@
 import sys
-
 from prompt_toolkit import prompt
-from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.history import FileHistory
 
 
 class CLICommands:
@@ -11,30 +10,30 @@ class CLICommands:
     COMMAND = "COMMAND"
     ARGS = "ARGS"
     CMD_SYNTAX = [MODE, COMMAND, ARGS]
-    
+
     DETECT = {
         "detect":
-        {
-            "run": {"args": ["input", "output"],
-                    "kwargs": ["kwarg1", "kwarg2", "asdf", "foo", "bar"]}
+            {
+                "run": {"args": ["input", "output"],
+                        "kwargs": ["kwarg1", "kwarg2", "asdf", "foo", "bar"]}
 
-        }
+            }
     }
 
     EXTRACT = {
         "extract":
-        {
-            "run": {"args": ["input", "output"],
-                    "kwargs": ["kwarg1", "kwarg2", "asdf", "foo", "bar"]}
-        }
+            {
+                "run": {"args": ["input", "output"],
+                        "kwargs": ["kwarg1", "kwarg2", "asdf", "foo", "bar"]}
+            }
     }
 
     ENROLL = {
         "enroll":
-        {
-            "run": {"args": ["input", "output"],
-                    "kwargs": ["kwarg1", "kwarg2", "asdf", "foo", "bar"]}
-        }
+            {
+                "run": {"args": ["input", "output"],
+                        "kwargs": ["kwarg1", "kwarg2", "asdf", "foo", "bar"]}
+            }
     }
 
     CMD_SCHEMA = {**DETECT, **EXTRACT, **ENROLL}
@@ -98,7 +97,6 @@ class BriarCLICompleter(Completer):
             if i == 0:
                 base_cmd = cmd
 
-
         outer_dict = None
         inner_dict = d
         section = ""
@@ -129,15 +127,14 @@ class BriarCLICompleter(Completer):
                             for sugg in arg_dict.keys()
                             if sugg.startswith(word)]
 
-
-        #sys.stdout.write("{}\r\n".rjust(25).format(inner_dict)[:125])
+        # sys.stdout.write("{}\r\n".rjust(25).format(inner_dict)[:125])
         print("\n", inner_dict)
         return [Completion(sugg, -len(txt))
                 for sugg in inner_dict.keys()
                 if sugg.startswith(txt)]
 
         return [[Completion(sugg, -len(in_txt[-1]))
-                            for sugg in d.keys()]]
+                 for sugg in d.keys()]]
 
     def _complete_base_cmd(self, word_to_complate):
         return [Completion(sugg, -len(word_to_complate))
@@ -206,10 +203,10 @@ class BriarCLICompleter(Completer):
         else:
             completions = []
 
-
         return completions
 
-DEFAULT_ARGS = {"in_path":str, "out_path":str, "":"", }
+
+DEFAULT_ARGS = {"in_path": str, "out_path": str, "": "", }
 
 if __name__ == "__main__":
     bcl = BriarCLI()

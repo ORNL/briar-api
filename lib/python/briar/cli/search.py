@@ -1,34 +1,32 @@
-import sys
-import os
-import optparse
-
-import numpy as np
-import pyvision as pv
-
+import asyncio
 import briar
 import briar.briar_client as briar_client
 import briar.briar_grpc.briar_pb2 as briar_pb2
 import briar.briar_grpc.briar_service_pb2 as srvc_pb2
-from briar.cli.connection import addConnectionOptions
-from briar.cli.media import addMediaOptions, collect_files
 import briar.grpc_json as grpc_json
-from briar.cli.detect import addDetectorOptions, DETECTION_FILE_EXT, detect_options2proto,save_detections
-from briar.cli.extract import addExtractOptions, TEMPLATE_FILE_EXT,extract_options2proto,save_extractions
+import cv2
+import numpy as np
+import optparse
+import os
+import pyvision as pv
+import sys
+import time
+from briar import media_converters
+from briar import timing
+from briar.cli.connection import addConnectionOptions
+from briar.cli.detect import addDetectorOptions, DETECTION_FILE_EXT, detect_options2proto, save_detections
+from briar.cli.extract import addExtractOptions, TEMPLATE_FILE_EXT, extract_options2proto, save_extractions
+from briar.cli.media import addMediaOptions, collect_files
 from briar.cli.track import save_tracklets
+from briar.media import BriarProgress, file_iter
 from briar.media_converters import image_cv2proto
-from briar.media import BriarProgress
-
-from matplotlib.patches import Circle
+from briar.media_converters import image_cv2proto, pathmap_str2dict, pathmap_path2remotepath
+from matplotlib.cbook import get_sample_data
 from matplotlib.offsetbox import (TextArea, DrawingArea, OffsetImage,
                                   AnnotationBbox)
-from matplotlib.cbook import get_sample_data
-import cv2
+from matplotlib.patches import Circle
 
-from briar import timing
-import time
 MATCHES_FILE_EXT = '.matches'
-
-
 
 
 def addSearchOptions(parser):
@@ -44,31 +42,32 @@ def addSearchOptions(parser):
     search_group.add_option("-o", "--out-dir", type="str", dest="out_dir", default=None,
                             help="Save the search results.")
 
-    search_group.add_option("--output-type", type="choice", choices=['pickle','briar','numpy','pandas','xml'], dest="output_type",
-                      default="briar",
-                      help="Choose an enrollment mode: subject or media. Default=briar")
+    search_group.add_option("--output-type", type="choice", choices=['pickle', 'briar', 'numpy', 'pandas', 'xml'],
+                            dest="output_type",
+                            default="briar",
+                            help="Choose an enrollment mode: subject or media. Default=briar")
     search_group.add_option("-m", "--modality", type="choice",
                             choices=['unspecified', 'whole_body', 'face', 'gait', 'all'], dest="modality",
-                            default="face",
+                            default="all",
                             help="Choose a biometric modality to detect/extract/enroll. Default=all")
 
     search_group.add_option("--database", type="str", dest="search_database", default='default',
                             help="Select the database to search.")
 
-    search_group.add_option("--max-results", type="int", dest="max_results", default=3,
+    search_group.add_option("--max-results", type="int", dest="max_results", default=-1,
                             help="Set the maximum number of search results returned for each face.")
 
     search_group.add_option("-d", "--use-detections", action="store_true", dest="use_detections", default=False,
-                      help="Use saved detections to perform the extract. Default=False")
+                            help="Use saved detections to perform the extract. Default=False")
 
     search_group.add_option("-t", "--use-templates", action="store_true", dest="use_templates", default=False,
-                      help="Use saved templates to perform the extract. Default=False")
+                            help="Use saved templates to perform the extract. Default=False")
 
     search_group.add_option("-w", "--enroll-whole-image", action="store_true", dest="whole_image", default=False,
-                      help="Do not run autodetect or use existing detections and generate a template from the whole "
-                           "image.")
+                            help="Do not run autodetect or use existing detections and generate a template from the whole "
+                                 "image.")
     search_group.add_option("--return-media", action="store_true", dest="return_media", default=False,
-                               help="Enables returning of media from workers to the client - will significantly increase output file sizes!")
+                            help="Enables returning of media from workers to the client - will significantly increase output file sizes!")
 
     # search_group.add_option("--probe-database", type="str", dest="probe_database", default=None,
     #                         help="Database to use as a probe set")
@@ -108,8 +107,6 @@ def search_options2proto(options):
     if val is not None:
         search_options.max_results.value = val
 
-
-
     if val is not None:
         search_options.max_results.value = options.max_results
     search_options.use_detections.value = options.use_detections
@@ -127,10 +124,11 @@ def search_options2proto(options):
     if val is not None:
         search_options.return_media.value = val
 
+
     return search_options
 
 
-def searchParseOptions(inputCommand = None):
+def searchParseOptions(inputCommand=None):
     """!
     Generate options for running searches and parse command line arguments into them.
 
@@ -139,15 +137,15 @@ def searchParseOptions(inputCommand = None):
     args = ['[image] [image_directory] [video] [...]']  # Add the names of arguments here.
     n_args = len(args)
     args = " ".join(args)
-    description =   "Run a 1:N search against a database. Input a probe entry" + \
-                    " and finds the top matches in a gallery database."
+    description = "Run a 1:N search against a database. Input a probe entry" + \
+                  " and finds the top matches in a gallery database."
     epilog = '''Created by David Bolme (bolmeds@ornl.gov) and Joel Brogan (broganjr@ornl.gov)'''
 
     version = briar.__version__
 
     # Setup the parser
     parser = optparse.OptionParser(usage='%s search [OPTIONS] %s' % ('python -m briar', args),
-                                   version=version, description=description, epilog=epilog,conflict_handler="resolve")
+                                   version=version, description=description, epilog=epilog, conflict_handler="resolve")
 
     parser.add_option("-v", "--verbose", action="store_true", dest="verbose", default=False,
                       help="Print out more program information.")
@@ -185,8 +183,7 @@ def searchParseOptions(inputCommand = None):
     return options, args
 
 
-
-def search(options=None,args=None):
+def search(options=None, args=None,input_command=None,ret=False):
     """!
     Using the options specified in the command line, runs a search within the specified database using specified
     probe template(s). Writes results to disk to a location specified by the cmd arguments
@@ -196,9 +193,8 @@ def search(options=None,args=None):
     api_start = time.time()
 
     if options is None and args is None:
-        options, args = searchParseOptions()
+        options, args = searchParseOptions(input_command)
     client = briar_client.BriarClient(options)
-
 
     # Check the status
     # print("*" * 35, 'STATUS', "*" * 35)
@@ -231,72 +227,85 @@ def search(options=None,args=None):
     if options.verbose:
         if media_list is not None:
             print("Searching {} media files in {} database.".format(len(media_list),
-                                                              database))
+                                                                    database))
         elif options.probe_database is not None:
             print("Searching {} probe database against {} database.".format(options.probe_database,
-                                                              database))
+                                                                            database))
 
     image_count = 0
-    batch_start_time = api_end = time.time()  #api_end-api_start = total time API took to find files and initialize
-
+    batch_start_time = api_end = time.time()  # api_end-api_start = total time API took to find files and initialize
     for filename in media_list:
         request_start = time.time()
-        if options.use_detections:
-            # use provided detections to extract templates from, then enroll the results
-            detection_filename = os.path.splitext(os.path.basename(filename))[0] + DETECTION_FILE_EXT
-            if options.detections_dir:
-                detections_path = os.path.join(options.detections_dir, detection_filename)
-            else:
-                detection_path = os.path.join(os.path.dirname(filename), detection_filename)
-            if not os.path.exists(detections_path):
-                raise FileNotFoundError("Detections file does not exist:", detections_path)
-            detections = [grpc_json.load(detections_path)]
-            searchReply=client.search(database,image_cv2proto(pv.Image(filename).asOpenCV2()),detect_options,extract_options,search_options) #TODO: make use detections work for search
-            if options.verbose:
-                print(searchReply)
-        elif options.use_templates:
-            # enroll provided templates into the database
-            template_filename = os.path.splitext(os.path.basename(filename))[0] + TEMPLATE_FILE_EXT
-            if options.templates:
-                template_path = os.path.join(options.templates_dir, detection_filename)
-            else:
-                template_path = os.path.join(os.path.dirname(filename), detection_filename)
-            templates = grpc_json.load(template_path)
-            searchReply = client.search(database, image_cv2proto(pv.Image(filename).asOpenCV2()),detect_options,extract_options,search_options) #TODO: make use templates work for search
-            if options.verbose:
-                print(searchReply)
-        else:
-            # run auto-detection on provided files, extract the detections, and enroll the results
-            searchReplies = client.search_files(database,[filename],detect_options,extract_options,search_options,request_start=request_start)
-            # searchReply = client.search(database, image_cv2proto(pv.Image(filename).asOpenCV2()),detect_options,extract_options,search_options)
-            pbar = BriarProgress(options,name='Searching')
-            durations = []
-            for i,searchReply in enumerate(searchReplies):
-                length = searchReply.progress.totalSteps
-                pbar.update(current=searchReply.progress.currentStep,total=length)
 
+        # run auto-detection on provided files, extract the detections, and enroll the results
+        it = file_iter([filename],options, options_dict= {"detect_options": detect_options, "extract_options": extract_options,
+                                    "search_options": search_options}, database_name=database,
+                       request_start=request_start, requestConstructor=searchRequestConstructor)
+        # for r in it:
+        #     print(r)
+        searchReplies = client.search(it)
+        pbar = BriarProgress(options, name='Searching')
+        perfile_durations = []
+        for i, searchReply in enumerate(searchReplies):
+            if options.max_frames > 0 and i >= options.max_frames:
+                break
+
+            length = searchReply.progress.totalSteps
+            pbar.update(current=searchReply.progress.currentStep, total=length)
+
+            if not searchReply.progress_only_reply:
                 templates = searchReply.extract_reply.templates
                 detections = searchReply.extract_reply.detect_reply
                 tracklets = searchReply.extract_reply.track_reply.tracklets
                 if not options.no_save:
-                    save_detections(filename, detections, options, i,modality=options.modality)
-                    save_tracklets(filename, tracklets, options, i,modality=options.modality)
-                    save_extractions(filename, templates, options, i,modality=options.modality)
+                    save_detections(filename, detections, options, i, modality=options.modality)
+                    save_tracklets(filename, tracklets, options, i, modality=options.modality)
+                    save_extractions(filename, templates, options, i, modality=options.modality)
                 if options.verbose:
                     print('similarities:')
                     print(searchReply.similarities)
+                searchReply.durations.total_duration.end = time.time()
                 if options.verbose and not options.progress:
-                    print('searched 1 image in ',timing.timeElapsed(searchReply.durations.total_duration), ' seconds')
+                    print('searched 1 image in ', timing.timeElapsed(searchReply.durations.total_duration), ' seconds')
                 out_dir = options.out_dir
                 if not options.out_dir:
                     out_dir = os.path.dirname(filename)
                 matches_name = os.path.splitext(os.path.basename(filename))[0] + MATCHES_FILE_EXT
                 matches_path = os.path.join(out_dir, matches_name)
-                durations.append(searchReply.durations)
+                perfile_durations.append(searchReply.durations)
+                print('Saving the final search matches to',matches_path)
                 grpc_json.save(searchReply, matches_path)
-            if options.save_durations:
-                timing.save_durations(filename, durations, options, "search")
+                if ret:
+                    yield searchReply
+        if options.save_durations:
+            timing.save_durations(filename, perfile_durations, options, "search")
 
         image_count += 1
         if options.max_images is not None and image_count >= options.max_images:
             break
+
+
+def searchRequestConstructor(media: briar_pb2.BriarMedia, durations: briar_pb2.BriarDurations, options_dict={},
+                             det_list_list=None, database_name: str = None):
+    durations.client_duration_frame_level.start = time.time()
+    detect_options = options_dict['detect_options']
+    extract_options = options_dict['extract_options']
+    search_options = options_dict['search_options']
+    database = None
+    if database_name is not None:
+        database = briar_pb2.BriarDatabase(name=database_name)
+    req = srvc_pb2.SearchRequest(media=media,
+                                 database=database,
+                                 detect_options=detect_options,
+                                 extract_options=extract_options,
+                                 durations=durations,
+                                 search_options=search_options)
+
+    if media.source_type == briar_pb2.BriarMedia.DataType.GENERIC_IMAGE:
+        req.detect_options.tracking_options.tracking_disable.value = True
+    # else:
+    #     req.detect_options.tracking_options.tracking_disable.value = False
+    it_time = time.time()
+    req.durations.client_duration_frame_level.end = it_time
+    req.durations.grpc_outbound_transfer_duration.start = it_time
+    return req

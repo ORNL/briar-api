@@ -1,28 +1,28 @@
-import cv2
-import matplotlib
+import briar
 import briar.briar_grpc.briar_pb2 as briar_pb2
 import briar.briar_grpc.briar_service_pb2 as srvc_pb2
-import briar
 import briar.grpc_json as grpc_json
-from briar.media_converters import image_proto2cv,image_proto2np
-import pyvision as pv
-import os
-import math
-import matplotlib.pyplot as plt
 import briar.media
 import cv2
-from mpl_toolkits.axes_grid1 import ImageGrid
-import numpy as np
-import matplotlib.gridspec as gridspec
+import cv2
+import math
+import matplotlib
 import matplotlib.animation as animation
-from matplotlib.patches import Circle
+import matplotlib.gridspec as gridspec
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+import pyvision as pv
+from briar.media_converters import image_proto2cv, image_proto2np
+from matplotlib.cbook import get_sample_data
 from matplotlib.offsetbox import (TextArea, DrawingArea, OffsetImage,
                                   AnnotationBbox)
-from matplotlib.cbook import get_sample_data
+from matplotlib.patches import Circle
+from mpl_toolkits.axes_grid1 import ImageGrid
 
 
 def visualize_matches(matches_path):
-    print('viz on ',matches_path)
+    print('viz on ', matches_path)
     matches_object = grpc_json.load(matches_path)
 
     probe_detections = matches_object.probe_detections
@@ -34,11 +34,11 @@ def visualize_matches(matches_path):
     probe_faces = []
     probe_matches = []
     all_matchims = []
-    for i,det in enumerate(probe_detections):
+    for i, det in enumerate(probe_detections):
         r = det.location
-        r = (r.x,r.y,r.x+r.width,r.y+r.height)
-        probe_chip = probe_image[r[1]:r[3],r[0]:r[2]]
-        cv2.rectangle(probe_image,(r[0],r[1]),(r[2],r[3]),(0,0,255),4)
+        r = (r.x, r.y, r.x + r.width, r.y + r.height)
+        probe_chip = probe_image[r[1]:r[3], r[0]:r[2]]
+        cv2.rectangle(probe_image, (r[0], r[1]), (r[2], r[3]), (0, 0, 255), 4)
         probe_faces.append(probe_chip)
         matchlist = matches_object.similarities[i].match_list
         matchims = []
@@ -46,24 +46,23 @@ def visualize_matches(matches_path):
         for matchinfo in matchlist:
             resultim = briar.media.decodeMedia(matchinfo.record.view)
             det = matchinfo.record.detection.location
-            matchims.append(resultim[det.y:det.y+det.height,det.x:det.x+det.width])
+            matchims.append(resultim[det.y:det.y + det.height, det.x:det.x + det.width])
         all_matchims.append(matchims)
     if len(all_matchims) > 0:
         max_matches = np.array([len(matchims) for matchims in all_matchims]).max()
 
-
         w = 100
         h = 100
 
-        fig8 = plt.figure(constrained_layout=False,figsize=(25,6))
-        nrows = max(len(probe_faces),3)
-        ncols = max_matches+int(max_matches*.25)
-        print('ncols:',ncols,nrows)
-        querywidth = ncols-max_matches
-        print('querywidht',querywidth)
+        fig8 = plt.figure(constrained_layout=False, figsize=(25, 6))
+        nrows = max(len(probe_faces), 3)
+        ncols = max_matches + int(max_matches * .25)
+        print('ncols:', ncols, nrows)
+        querywidth = ncols - max_matches
+        print('querywidht', querywidth)
         gs1 = fig8.add_gridspec(nrows=nrows, ncols=ncols, left=0.05, right=1, wspace=0.05)
         f8_ax1 = fig8.add_subplot(gs1[:, :querywidth])
-        f8_ax1.imshow(probe_image[:,:,::-1])
+        f8_ax1.imshow(probe_image[:, :, ::-1])
         for row in range(len(probe_faces)):
             matchlist = matches_object.similarities[row].match_list
             matchims = all_matchims[row]
@@ -71,56 +70,55 @@ def visualize_matches(matches_path):
                 if col < len(matchims):
                     entry_id = ''
                     if col > 0:
-                        matchinfo = matchlist[col-1]
+                        matchinfo = matchlist[col - 1]
                         entry_id = matchinfo.record.entry_id[:8]
                     img = cv2.resize(matchims[col], (w, h))[:, :, ::-1]
-                    f8_ax2 = fig8.add_subplot(gs1[row, col+querywidth])
+                    f8_ax2 = fig8.add_subplot(gs1[row, col + querywidth])
                     f8_ax2.imshow(img)
                     f8_ax2.xaxis.set_visible(False)
                     f8_ax2.yaxis.set_visible(False)
                     if col > 0:
-                        s=float("{0:.2f}".format(matchlist[col-1].score))
-                        f8_ax2.text(0.5, -0.2,   entry_id + "-" +str(s), ha="center",transform=f8_ax2.transAxes)
+                        s = float("{0:.2f}".format(matchlist[col - 1].score))
+                        f8_ax2.text(0.5, -0.2, entry_id + "-" + str(s), ha="center", transform=f8_ax2.transAxes)
         plt.show()
 
 
-def decode_track(tracklet,framenum=None,newsource=None):
-
+def decode_track(tracklet, framenum=None, newsource=None):
     id = tracklet.tracklet_id
-    frames= []
+    frames = []
 
     if framenum == "center":
-        targetframe = int(len(tracklet.detections)/2)
+        targetframe = int(len(tracklet.detections) / 2)
     elif framenum is not None:
         targetframe = framenum
     if newsource:
-
         cap = cv2.VideoCapture(newsource)
         numframes = cap.get(cv2.CAP_PROP_FRAME_COUNT)
         print('decoding new source ', newsource)
     frame_i = 0
-    for i,det in enumerate(tracklet.detections):
+    for i, det in enumerate(tracklet.detections):
 
         if not framenum or (framenum and i == targetframe):
             if not newsource:
-                im = briar.media.decodeMedia(det.media)[:,:,::-1]
+                im = briar.media.decodeMedia(det.media)[:, :, ::-1]
                 frames.append(im[:, :, ::-1])
             else:
-                curframe= cap.get(cv2.CAP_PROP_POS_FRAMES)
+                curframe = cap.get(cv2.CAP_PROP_POS_FRAMES)
                 if not i == curframe:
                     cap.set(cv2.CAP_PROP_POS_FRAMES, min(numframes - 1, i))
-                ret,frame = cap.read()
-                if frame is not None:
-                    im = frame[det.location.y:det.location.height+det.location.y,det.location.x:det.location.width+det.location.x]
-                    frames.append(im[:,:,::-1])
+                ret, frame = cap.read()
+                if frame is not None and ret is not False:
+                    im = frame[det.location.y:det.location.height + det.location.y,
+                         det.location.x:det.location.width + det.location.x]
+                    frames.append(im[:, :, ::-1])
     return frames
 
 
-def visualize_track(track_path,options):
+def visualize_track(track_path, options):
     track_object = grpc_json.load(track_path)
 
     if options.verbose:
-        print('track ',os.path.basename(track_path),' contains ', len(track_object), ' tracklets')
+        print('track ', os.path.basename(track_path), ' contains ', len(track_object), ' tracklets')
         for tracklet in track_object:
             print('\t tracklet ', tracklet.tracklet_id, ' has ', len(tracklet.detections), ' frames')
     for obj in track_object:
@@ -128,14 +126,15 @@ def visualize_track(track_path,options):
         id = obj.tracklet_id
         for im in vis:
             if im is not None and min(im.shape) > 0:
-                cv2.imshow('track '+str(id),im)
+                cv2.imshow('track ' + str(id), im)
                 cv2.waitKey(120)
-
 
 
 def visualize_detection(detection_path):
     print('unimplemented')
     pass
+
+
 if __name__ == '__main__':
     # fdir = "/Users/2r6/Projects/briar/FairMOT/videos/MOT16-03.tracklet"
     # fdir = "/Users/2r6/Projects/briar/briar-api/media/test_probe/hillary3.matches"
@@ -147,7 +146,7 @@ if __name__ == '__main__':
     # fdir = "/Users/2r6/Projects/briar/briar-api/media/test_gallery/quinten1.matches"
     fdir = "/Users/2r6/Projects/briar/briar-api/media/test_gallery/hillary2.matches"
     if os.path.exists(fdir) and os.path.isdir(fdir):
-        files = [os.path.join(fdir,f) for f in os.listdir(fdir)]
+        files = [os.path.join(fdir, f) for f in os.listdir(fdir)]
     elif os.path.exists(fdir) and os.path.isfile(fdir):
         files = [fdir]
 
@@ -159,7 +158,7 @@ if __name__ == '__main__':
 
 
 class match_matrix_visualizer:
-    def __init__(self,searchReply,probedbname,gallerydbname):
+    def __init__(self, searchReply, probedbname, gallerydbname):
         self.searchReply = searchReply
         self.probedb_name = probedbname
         self.gallerydb_name = gallerydbname
@@ -175,6 +174,7 @@ class match_matrix_visualizer:
         self.xlabs = list(searchReply.match_matrix.column_headers)
         self.ylabs = list(searchReply.match_matrix.row_headers)
         self.gt = None
+
     def showmat_interactive(self):
         fig, ax = plt.subplots()
         self.fig = fig
@@ -211,15 +211,14 @@ class match_matrix_visualizer:
 def get_frame(vidfile):
     cap = cv2.VideoCapture(vidfile)
     numframes = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-    cap.set(cv2.CAP_PROP_POS_FRAMES,min(numframes-1,20))
+    cap.set(cv2.CAP_PROP_POS_FRAMES, min(numframes - 1, 20))
     ret, frame = cap.read()
     return frame
 
-def update_annot(ind,visualizer,pltloc,playvid=False):
 
+def update_annot(ind, visualizer, pltloc, playvid=False):
     # pos = sc.get_offsets()[ind["ind"][0]]
     visualizer.annotations['main'].xy = ind
-
 
     if str(ind[0]) in visualizer.searchReply.matrix_probe_tracklets:
         tracklet_probe = visualizer.searchReply.matrix_probe_tracklets[str(ind[0])]
@@ -231,7 +230,7 @@ def update_annot(ind,visualizer,pltloc,playvid=False):
         #         probe_start_frame = att.ivalue
         #     if att == "stop_frame":
         #         probe_stop_frame = att.ivalue
-        images = decode_track(tracklet_probe,framenum='center',newsource=visualizer.xsources[ind[0]])
+        images = decode_track(tracklet_probe, framenum='center', newsource=visualizer.xsources[ind[0]])
         frame = images[0]
     else:
         # arr = np.arange(100).reshape((10, 10))
@@ -239,7 +238,7 @@ def update_annot(ind,visualizer,pltloc,playvid=False):
     if str(ind[1]) in visualizer.searchReply.matrix_gallery_tracklets:
         tracklet_gallery = visualizer.searchReply.matrix_gallery_tracklets[str(ind[1])]
         # attributes = visualizer.searchReply.gallery_attributes[str(ind[0])]
-        images = decode_track(tracklet_gallery,framenum='center',newsource=visualizer.ysources[ind[1]])
+        images = decode_track(tracklet_gallery, framenum='center', newsource=visualizer.ysources[ind[1]])
         gallery_start_frame = None
         gallery_stop_frame = None
         # print(attributes)
@@ -252,20 +251,21 @@ def update_annot(ind,visualizer,pltloc,playvid=False):
     else:
         # arr = np.arange(100).reshape((10, 10))
         frame = get_frame(visualizer.xsources[ind[0]])
-    text = "{}\n {}".format(visualizer.xsources[ind[0]] ,
+    text = "{}\n {}".format(visualizer.xsources[ind[0]],
                             visualizer.ysources[ind[1]])
     visualizer.annotations['main'].set_text(text)
     croppad = 30
-    halfwidth = int(frame.shape[1]/2)
-    halfheight = int(frame.shape[0]/2)
+    halfwidth = int(frame.shape[1] / 2)
+    halfheight = int(frame.shape[0] / 2)
     # arr = cv2.resize(frame[halfheight-croppad:halfheight+croppad,halfwidth-croppad:halfwidth+croppad],(30,30))
-    arr = cv2.resize(frame,(30,30))
+    arr = cv2.resize(frame, (30, 30))
     # playVideo(visualizer.xsources[ind[0]])
     if playvid:
-        track1_vid=decode_track(tracklet_probe,newsource=visualizer.xsources[ind[0]])
-        track2_vid=decode_track(tracklet_gallery,newsource=visualizer.ysources[ind[1]])
+        track1_vid = decode_track(tracklet_probe, newsource=visualizer.xsources[ind[0]])
+        track2_vid = decode_track(tracklet_gallery, newsource=visualizer.ysources[ind[1]])
 
-        playVideo([track1_vid,track2_vid],titles=[os.path.basename(visualizer.xsources[ind[0]]),os.path.basename(visualizer.xsources[ind[1]])])
+        playVideo([track1_vid, track2_vid],
+                  titles=[os.path.basename(visualizer.xsources[ind[0]]), os.path.basename(visualizer.xsources[ind[1]])])
     # arr = cv2.resize(cv2.imread(xsources[ind[0]]),(30,30))
     im = OffsetImage(arr, zoom=2)
     im.image.axes = visualizer.ax
@@ -280,28 +280,32 @@ def update_annot(ind,visualizer,pltloc,playvid=False):
     visualizer.annotations['image'] = ab
     visualizer.ax.add_artist(ab)
 
-
     # ab.set_image(cv2.imread(xsources[ind[0]]))
     # ab.xy = ind
     # annot.get_bbox_patch().set_facecolor(cmap(norm(c[ind["ind"][0]])))
     visualizer.annotations['main'].get_bbox_patch().set_alpha(0.4)
-def windowclick(event,visualizer):
-    windowhover(event,visualizer,playvid=True)
-def windowhover(event,visualizer,playvid=False):
+
+
+def windowclick(event, visualizer):
+    windowhover(event, visualizer, playvid=True)
+
+
+def windowhover(event, visualizer, playvid=False):
     vis = visualizer.annotations['main'].get_visible()
     x_im = None
     y_im = None
     if event.xdata and event.ydata:
-        x_im=math.floor(event.xdata-.5)+1
-        y_im=math.floor(event.ydata-.5)+1
+        x_im = math.floor(event.xdata - .5) + 1
+        y_im = math.floor(event.ydata - .5) + 1
     x_window = event.x
     y_window = event.y
-    pltloc = x_window,y_window
+    pltloc = x_window, y_window
     # print(x_im,y_im,x_window,y_window)
-    if y_im is not None and x_im is not None and ((not y_im == visualizer.prevy and not x_im == visualizer.prevx) or playvid):
+    if y_im is not None and x_im is not None and (
+            (not y_im == visualizer.prevy and not x_im == visualizer.prevx) or playvid):
         visualizer.prevx = x_im
         visualizer.prevy = y_im
-        update_annot((x_im,y_im),visualizer,pltloc,playvid=playvid)
+        update_annot((x_im, y_im), visualizer, pltloc, playvid=playvid)
         visualizer.annotations['main'].set_visible(True)
         visualizer.fig.canvas.draw_idle()
     else:
@@ -309,7 +313,8 @@ def windowhover(event,visualizer,playvid=False):
             visualizer.annotations['main'].set_visible(False)
             visualizer.fig.canvas.draw_idle()
 
-def windowhover_filename_only(event,visualizer):
+
+def windowhover_filename_only(event, visualizer):
     vis = visualizer.annotations['main'].get_visible()
     x_im = None
     y_im = None
@@ -331,8 +336,9 @@ def windowhover_filename_only(event,visualizer):
         if vis:
             visualizer.annotations['main'].set_visible(False)
             visualizer.fig.canvas.draw_idle()
-def update_annot_filename_only(ind,visualizer,pltloc):
 
+
+def update_annot_filename_only(ind, visualizer, pltloc):
     # pos = sc.get_offsets()[ind["ind"][0]]
     visualizer.annotations['main'].xy = ind
     probe_attributes = visualizer.searchReply.matrix_probe_attributes
@@ -348,7 +354,7 @@ def update_annot_filename_only(ind,visualizer,pltloc):
                 probe_start_frame = att.ivalue
             if att.key == "stop_frame":
                 probe_stop_frame = att.ivalue
-        print(probe_start_frame,probe_stop_frame)
+        print(probe_start_frame, probe_stop_frame)
     probe_attributes = visualizer.searchReply.matrix_probe_attributes[str(ind)].attributes
     gallery_start_frame = None
     gallery_stop_frame = None
@@ -362,23 +368,26 @@ def update_annot_filename_only(ind,visualizer,pltloc):
             if att.key == "stop_frame":
                 gallery_stop_frame = att.ivalue
 
-    text = "{}\n{}\n{}\n{}".format(os.path.basename(visualizer.xsources[ind[0]]),"start: "+str(probe_start_frame)+" stop:"+str(probe_stop_frame),
-                           os.path.basename(visualizer.ysources[ind[1]]),"start: "+str(gallery_start_frame)+" stop:"+str(gallery_stop_frame))
+    text = "{}\n{}\n{}\n{}".format(os.path.basename(visualizer.xsources[ind[0]]),
+                                   "start: " + str(probe_start_frame) + " stop:" + str(probe_stop_frame),
+                                   os.path.basename(visualizer.ysources[ind[1]]),
+                                   "start: " + str(gallery_start_frame) + " stop:" + str(gallery_stop_frame))
     visualizer.annotations['main'].set_text(text)
     visualizer.annotations['main'].get_bbox_patch().set_alpha(0.4)
 
-def playVideo(vidfiles,titles=None,attributes=None,isvideo=True):
+
+def playVideo(vidfiles, titles=None, attributes=None, isvideo=True):
     numfigs = len(vidfiles)
     fig, ax = plt.subplots(1, numfigs)
     if numfigs == 1:
         ax = [ax]
     vids = []
 
-    for i,vidfile in enumerate(vidfiles):
+    for i, vidfile in enumerate(vidfiles):
         cd = {}
-        if isvideo and isinstance(vidfile,str):
+        if isvideo and isinstance(vidfile, str):
             cap = cv2.VideoCapture(vidfile)
-            cd['cap']=cap
+            cd['cap'] = cap
             numframes = cap.get(cv2.CAP_PROP_FRAME_COUNT)
         else:
             numframes = len(vidfile)
@@ -422,4 +431,3 @@ def playVideo(vidfiles,titles=None,attributes=None,isvideo=True):
         plt.draw()
 
         plt.pause(.05)
-

@@ -13,4 +13,5 @@
 
 # A working docker command:
 docker run --rm -v $(pwd)/doc:/out -v $(pwd)/proto/:/protos pseudomuto/protoc-gen-doc briar/briar_grpc/briar.proto briar/briar_grpc/briar_error.proto briar/briar_grpc/briar_service.proto
+#podman run --rm -v $(pwd)/doc:/out -v $(pwd)/proto/:/protos pseudomuto/protoc-gen-doc briar/briar_grpc/briar.proto briar/briar_grpc/briar_error.proto briar/briar_grpc/briar_service.proto
 mv doc/index.html doc/Protobuf-Object-Doc.html

@@ -1,0 +1,712 @@
+import unittest
+import os
+
+import numpy as np
+import warnings
+import briar
+from briar.tests import finalize_db,checkpoint_db
+import briar.briar_grpc.briar_service_pb2 as srvc_pb2
+warnings.filterwarnings("ignore", category=ResourceWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+from briar.media_converters import modality_proto2string
+from briar.tests import test_warn
+
+RUN_TESTS = os.getenv('RUN_TESTS',None)
+if RUN_TESTS is not None:
+    RUN_TESTS_UNPARSED = RUN_TESTS.split(',')
+    RUN_TESTS=[]
+    for s in RUN_TESTS_UNPARSED:
+        if '-' in s:
+            parts = s.split('-')
+            start = int(parts[0])
+            stop = int(parts[1])
+            RUN_TESTS.extend(list(range(start,stop+1)))
+        else:
+            RUN_TESTS.append(int(s))
+else:
+    RUN_TESTS = list(range(1,15))
+unittest.TestLoader.sortTestMethodsUsing = None
+USES_FRONTEND_MERGING = os.getenv('BRIAR_USE_FRONTEND_MERGING')
+DATABASE_SUFFIX_FLAG = os.getenv('BRIAR_DATABASE_SUFFIX_FLAG')
+USE_SINGLE_SUBJECT = os.getenv('BRIAR_USE_SINGLE_SUBJECT')
+if USE_SINGLE_SUBJECT is None:
+    USE_SINGLE_SUBJECT = ' '
+else:
+
+    if USE_SINGLE_SUBJECT.lower() == 'false' or USE_SINGLE_SUBJECT.lower() == '0':
+        USE_SINGLE_SUBJECT = ' '
+    else:
+        USE_SINGLE_SUBJECT = ' --single-subject '
+unittest.TestLoader.sortTestMethodsUsing = None
+
+if USES_FRONTEND_MERGING is None:
+    USES_FRONTEND_MERGING = False
+elif USES_FRONTEND_MERGING.lower() == 'true':
+    USES_FRONTEND_MERGING = True
+else:
+    USES_FRONTEND_MERGING = False
+
+
+
+if USES_FRONTEND_MERGING:
+    if DATABASE_SUFFIX_FLAG is None:
+        print('environment variable BRIAR_DATABASE_SUFFIX_FLAG is not set. Defaulting to ADDRESS,SERVICE')
+        DATABASE_SUFFIX_FLAG = 'ADDRESS,SERVICE'
+    else:
+        print('environment variable BRIAR_DATABASE_SUFFIX_FLAG is set to', DATABASE_SUFFIX_FLAG)
+else:
+    DATABASE_SUFFIX_FLAG = 'NONE'
+# print('USES_FRONTEND_MERGING:',USES_FRONTEND_MERGING)
+
+args_string = " --progress "
+media_args = " --no-save "
+enroll_args = " --auto-create-database "
+
+os.getenv('BRIAR_VALIDATION_DIR')
+VALIDATION_DIR = os.getenv('BRIAR_VALIDATION_DIR')#"/Users/2r6/Projects/briar/briar-evaluation/evaluation/phase2/briar_validation_v4.2.0/"
+DATASET_DIR = os.getenv('BRIAR_DATASET_DIR') #'/Users/2r6/briarrd/'
+OUTPUT_DIR = os.getenv('BRIAR_VALIDATION_OUTPUT_DIR')#'/Users/2r6/Projects/briar/testing_output'
+probe_filename = "validation_probe.xml"
+gallery_1_filename = "validation_gallery1.xml"
+gallery_2_filename = "validation_gallery2.xml"
+
+database_gallery_1_name = 'db_gallery_1'
+database_gallery_2_name = 'db_gallery_2'
+database_probe_name = 'db_probe'
+port_list = []
+
+requires_database_merge = False
+number_of_partitions = 1
+def setUpModule():
+    warnings.filterwarnings("ignore", category=ResourceWarning)
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+    print('setting up validation module')
+    # args_string = " --progress "
+    pass
+
+def setUpClass_main(cls) -> None:
+    warnings.filterwarnings("ignore", category=ResourceWarning)
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
+    from briar.sigset import parse
+    try:
+        cls.gallery_1_sigset_path = os.path.join(VALIDATION_DIR,gallery_1_filename)
+        cls.gallery_2_sigset_path = os.path.join(VALIDATION_DIR,gallery_2_filename)
+        cls.probe_sigset_path = os.path.join(VALIDATION_DIR,probe_filename)
+        cls.probe_sigset = parse.parseBriarSigset(cls.probe_sigset_path)
+        cls.gallery1_sigset = parse.parseBriarSigset(cls.gallery_1_sigset_path)
+        cls.gallery2_sigset = parse.parseBriarSigset(cls.gallery_2_sigset_path)
+    except Exception as e:
+        print("Could not run tests:",e)
+
+class Test000InitialConfig(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        from briar.cli.status import get_service_configuration
+        setUpClass_main(cls)
+        cls.config_reply = get_service_configuration(input_command='status' + args_string)
+    def testValidationDir(self):
+        if VALIDATION_DIR is None:
+            print('You must set the environment variable VALIDATION_DIR')
+        self.assertIsNotNone(VALIDATION_DIR)
+    def testDatasetDir(self):
+        if DATASET_DIR is None:
+            print('You must set the environment variable DATASET_DIR')
+        self.assertIsNotNone(DATASET_DIR)
+    def testOutDir(self):
+        if OUTPUT_DIR is None:
+            print('You must set the environment variable OUTDIR')
+        self.assertIsNotNone(OUTPUT_DIR)
+
+    def test_01_config_portlist(self):
+        """Testing configuration port list"""
+        self.config_reply : srvc_pb2.BriarServiceConfigurationReply
+        self.assertGreater(len(self.config_reply.port_list),0)
+        global port_list
+        port_list = self.config_reply.port_list
+
+        for port in self.config_reply.port_list:
+            self.assertIn(':',port)
+            self.assertGreaterEqual(len(port.split(':')),2)
+        self.assertEqual(self.config_reply.base_port,self.config_reply.port_list[0])
+
+    def test_02_port_connections(self):
+        """Testing port connections"""
+        from briar.cli.status import status
+
+        for port in self.config_reply.port_list:
+            success = False
+            try:
+                print('checking port ',port)
+                status_reply = status(input_command='status'+ args_string, ret=True)
+                success = True
+            except Exception as e:
+                print('Could not connect to ',port,':',e)
+            self.assertTrue(success)
+
+    def test_03_num_service_ports(self):
+        """Testing number of ports variable"""
+        self.assertGreaterEqual(self.config_reply.number_of_service_ports, 1)
+        self.assertEqual(self.config_reply.number_of_service_ports,len(self.config_reply.port_list))
+        if self.config_reply.number_of_service_ports > 1 and USES_FRONTEND_MERGING:
+            global requires_database_merge
+            requires_database_merge = True
+        else:
+            global DATABASE_SUFFIX_FLAG
+            DATABASE_SUFFIX_FLAG = 'NONE'
+    def test_04_num_procs_per_port(self):
+        self.assertGreaterEqual(self.config_reply.number_of_processes_per_port, 1)
+        self.assertTrue((briar.PLATFORM == 'darwin' and self.config_reply.number_of_processes_per_port == 1) or briar.PLATFORM != 'darwin','MacOS platform not supported for running multiple processes on a single port, as SO_REUSE_PORT does not load balance')
+        # global number_of_partitions
+        # number_of_partitions = self.config_reply.number_of_processes_per_port*self.config_reply.number_of_service_ports
+        if self.config_reply.number_of_processes_per_port > 1 and USES_FRONTEND_MERGING:
+            global requires_database_merge
+            requires_database_merge = True
+        # else:
+        #     global DATABASE_SUFFIX_FLAG
+        #     DATABASE_SUFFIX_FLAG = 'NONE'
+    def test_05_num_threads_per_port(self):
+        self.assertGreaterEqual(self.config_reply.number_of_threads_per_process, 1)
+        if self.config_reply.number_of_threads_per_process > 1 and USES_FRONTEND_MERGING:
+            global requires_database_merge
+            requires_database_merge = True
+        # else:
+        #     global DATABASE_SUFFIX_FLAG
+        #     DATABASE_SUFFIX_FLAG = 'NONE'
+
+        global number_of_partitions
+        global DATABASE_SUFFIX_FLAG
+
+        number_of_partitions = self.config_reply.number_of_processes_per_port*self.config_reply.number_of_service_ports*self.config_reply.number_of_threads_per_process
+        if self.config_reply.number_of_processes_per_port == 1 and self.config_reply.number_of_processes_per_port ==  1 and self.config_reply.number_of_service_ports == 1:
+
+            DATABASE_SUFFIX_FLAG = 'NONE'
+
+        elif self.config_reply.number_of_processes_per_port == 1 and self.config_reply.number_of_processes_per_port ==  1 and (DATABASE_SUFFIX_FLAG.upper() == 'S' or DATABASE_SUFFIX_FLAG.upper() == 'SERVICE'):
+            DATABASE_SUFFIX_FLAG = 'NONE' #Set to none because we only have 1 service, and we are naming suffixes based on unique services, so none should be needed
+
+        elif self.config_reply.number_of_service_ports == 1 and (DATABASE_SUFFIX_FLAG.upper() == 'A' or DATABASE_SUFFIX_FLAG.upper() == 'ADDRESS'):
+            DATABASE_SUFFIX_FLAG = 'NONE' #Set to none because we only have 1 address, and we are naming suffixes based on unique addresses, so none should be needed
+        if not DATABASE_SUFFIX_FLAG == "NONE" and DATABASE_SUFFIX_FLAG is not None:
+            global enroll_args
+            enroll_args += " --database-suffix " + DATABASE_SUFFIX_FLAG + " "
+
+    def test_06_correct_database_creation(self):
+        message = 'Your service creates unique databases for each unique service running on non-unique ports. The Briar API can only call checkpoint and finalize on a service port, but not a unique service running within that port.'
+
+        self.assertFalse(self.config_reply.number_of_processes_per_port > 1 and USES_FRONTEND_MERGING and DATABASE_SUFFIX_FLAG.upper() == "SERVICE",message)
+        self.assertFalse(self.config_reply.number_of_processes_per_port > 1 and USES_FRONTEND_MERGING and DATABASE_SUFFIX_FLAG.upper() == "S",message)
+        self.assertFalse(
+            requires_database_merge and DATABASE_SUFFIX_FLAG.upper() == "NONE",
+            'Your service currently requires front-end merging (either only 1 process is running or you specified BRIAR_USE_FRONT_END_MERGING, but you are not specifying how the API should create a suffix for your databases to keep them unique.')
+        self.assertFalse(not requires_database_merge and DATABASE_SUFFIX_FLAG is not None and not DATABASE_SUFFIX_FLAG.upper()=="NONE",'Your service currently does not need front-end merging, but you are specifying a suffix for the api to use on your database with environment variable BRIAR_DATABASE_SUFFIX_FLAG.  This could lead to errors so we are setting the suffix to NONE')
+        test_warn(self.assertFalse,self.config_reply.number_of_processes_per_port > 1 and USES_FRONTEND_MERGING and DATABASE_SUFFIX_FLAG.upper() == "ADDRESS+SERVICE",message)
+        test_warn(self.assertFalse,self.config_reply.number_of_processes_per_port > 1 and USES_FRONTEND_MERGING and DATABASE_SUFFIX_FLAG.upper() == "ADDRESS,SERVICE",message)
+        test_warn(self.assertFalse,
+                  self.config_reply.number_of_processes_per_port > 1 and USES_FRONTEND_MERGING and DATABASE_SUFFIX_FLAG.upper() == "AS",
+                  message)
+
+        self.assertFalse(
+            self.config_reply.number_of_threads_per_process > 1 and USES_FRONTEND_MERGING and DATABASE_SUFFIX_FLAG.upper() == "SERVICE",
+            message)
+        self.assertFalse(
+            self.config_reply.number_of_threads_per_process > 1 and USES_FRONTEND_MERGING and DATABASE_SUFFIX_FLAG.upper() == "S",
+            message)
+        test_warn(self.assertFalse,
+                  self.config_reply.number_of_threads_per_process > 1 and USES_FRONTEND_MERGING and DATABASE_SUFFIX_FLAG.upper() == "ADDRESS+SERVICE",
+                  message)
+        test_warn(self.assertFalse,
+                  self.config_reply.number_of_threads_per_process > 1 and USES_FRONTEND_MERGING and DATABASE_SUFFIX_FLAG.upper() == "ADDRESS,SERVICE",
+                  message)
+        test_warn(self.assertFalse,
+                  self.config_reply.number_of_threads_per_process > 1 and USES_FRONTEND_MERGING and DATABASE_SUFFIX_FLAG.upper() == "AS",
+                  message)
+
+
+
+
+def run_on_multi(self,base_db_name,mapped_function):
+        from briar.cli.database.refresh import database_refresh
+        from briar.cli.database.list import database_list
+        # self.assertTrue(reply is not None)
+        database_refresh(input_command='database refresh ' + args_string)
+        database_list_base = database_list(ret=True, input_command="database list" + args_string)
+        total_database_partitions = []
+        for database_name in database_list_base:
+            if base_db_name+'_' in database_name:
+                total_database_partitions.append(database_name)
+
+        test_warn(self.assertEqual,len(total_database_partitions),number_of_partitions,"The number of created sub-databases does not match the number of partitions your algorithm ran")
+
+        for port in port_list:
+            allargs = args_string.split(' ')
+            args_removed_port = []
+            rem = False
+            for a in allargs:
+                if not a == '':
+                    if rem:
+                        rem = False
+                    else:
+                        if a == '-p' or a == '--port':
+                            rem = True
+                        else:
+                            args_removed_port.append(a)
+
+            args_removed_port = ' ' + ' '.join(args_removed_port) + ' '
+
+            dblist_local = database_list(ret=True, input_command="database list" + args_removed_port + ' -p ' + port)
+            dbfound = 0
+            for database_name in total_database_partitions:
+                removed_base = database_name.replace(base_db_name+'_','') #this removes the base name from the whole database name, now we just have possible address and service identifier
+
+                database_name_parts = removed_base.split('_')
+                service_address = None
+                if DATABASE_SUFFIX_FLAG is not None:
+                    if DATABASE_SUFFIX_FLAG.upper() == 'ADDRESS,SERVICE' or DATABASE_SUFFIX_FLAG.upper() == 'AS' or DATABASE_SUFFIX_FLAG.upper() == 'ADDRESS+SERVICE':
+                        test_warn(self.assertIsNot,DATABASE_SUFFIX_FLAG.upper(),'ADDRESS,SERVICE','Your service creates unique databases for each unique service runnin on non-unique ports. The Briar API can only call checkpoint and finalize on a service port, but not a unique service running within that port.')
+                        test_warn(self.assertIsNot,DATABASE_SUFFIX_FLAG.upper(),'AS','Your service creates unique databases for each unique service runnin on non-unique ports. The Briar API can only call checkpoint and finalize on a service port, but not a unique service running within that port.')
+
+                        self.assertGreaterEqual(len(database_name_parts),2,'incorrect format of ' + str(database_name_parts) + 'from full database name ' + database_name)
+                        service_identifier = database_name_parts[-1]
+                        service_address = removed_base.replace('_'+service_identifier,'') #do this because the API replaces colons with underscores to provide valid filenames in the address
+                    elif DATABASE_SUFFIX_FLAG.upper() == 'ADDRESS' or DATABASE_SUFFIX_FLAG.upper() == 'A':
+                        service_address = removed_base
+                    elif DATABASE_SUFFIX_FLAG.upper() == 'SERVICE' or DATABASE_SUFFIX_FLAG.upper() == 'S':
+                        self.assertNotEquals(DATABASE_SUFFIX_FLAG.upper(),'SERVICE','Your algorithm is set to only produce sub-databases with service identifiers, which cannot be directly called to checkpoint of finalize by the API')
+                        self.assertNotEquals(DATABASE_SUFFIX_FLAG.upper(), 'S',
+                                         'Your algorithm is set to only produce sub-databases with service identifiers, which cannot be directly called to checkpoint of finalize by the API')
+                    else:
+                        self.assertFalse(True,'DATABASE_SUFFIX_FLAG is '+DATABASE_SUFFIX_FLAG + 'and cannot be parsed to determine correct database naming operation')
+
+                if service_address is not None:
+                    service_port = service_address.split('_')[-1]
+                    # print('service address:', service_address,service_port,port.replace(':','_'))
+                    if service_port in port and service_address == port.replace(':','_').replace('.','-') and database_name in dblist_local:
+                        mapped_function(args_string + ' -p ' + port + ' ', database_name)
+                        print('Matched database', database_name, ' to service on port', port)
+                        dbfound+=1
+                elif database_name in dblist_local:
+                    mapped_function(args_string + ' -p ' + port + ' ',database_name)
+                    test_warn(self.assertTrue,False,'We have found a database match but cannot gaurantee that it is the correct match, since we cannot link port numbers and addresses')
+                    print('Matched database',database_name,' to service on port', port)
+                    dbfound+=1
+            print('db local list for',port,' dblist_local')
+            self.assertGreaterEqual(dbfound,1,'None of the databases ' + str(total_database_partitions) + 'located the local configured service '+port)
+
+def get_info(self,db_name):
+    from briar.cli.database.info import database_info
+    info_reply = database_info(input_command="database info " + args_string + db_name, ret=True)
+    db_info = info_reply.info
+    entries = db_info.entry_count
+    templates = db_info.template_count
+    failed = db_info.failed_enrollment_count
+    dbsize = db_info.total_database_size
+    avgsize = db_info.average_entry_size
+    entry_list = list(db_info.entry_ids)
+    entry_sizes = list(db_info.entry_sizes)
+    modalities = [modality_proto2string(m) for m in db_info.modalities]
+    return entries,templates,failed
+def get_multi_info(self,base_db_name):
+    from briar.cli.database.refresh import database_refresh
+    from briar.cli.database.list import  database_list
+    # self.assertTrue(reply is not None)
+    database_refresh(input_command='database refresh ' + args_string) #runs refresh on the base port
+    database_list = database_list(ret=True, input_command="database list" + args_string)
+    total_database_partitions = []
+    for database_name in database_list:
+        if base_db_name+'_' in database_name:
+            total_database_partitions.append(database_name)
+
+    test_warn(self.assertEqual,len(total_database_partitions),number_of_partitions,"The number of created sub-databases does not match the number of partitions your algorithm ran")
+    total_templates = 0
+    total_entries = 0
+    total_failed = 0
+    for database_name in total_database_partitions:
+        entries,templates,failed = get_info(self,database_name)
+        total_templates+=templates
+        total_entries+=entries
+        total_failed+=failed
+
+    return total_entries,total_templates,total_failed
+
+def merge_dbs(self,db_name):
+    if requires_database_merge:
+        from briar.cli.database.merge import database_merge
+        from briar.cli.database.refresh import  database_refresh
+        from briar.cli.database.list import database_list
+        from briar.cli.database.info import  database_info
+        # self.assertTrue(reply is not None)
+        refresh_reply = database_refresh(input_command='database refresh ' + args_string )
+        avail_database_list = database_list(ret=True, input_command="database list" + args_string)
+        total_entries,total_templates,total_failed = get_multi_info(self,db_name)
+        database_merge(input_command='database merge --regex '+ db_name +'_* --output-database merged_'+db_name + ' ' + args_string)
+        avail_database_list = database_list(ret=True, input_command="database list" + args_string)
+        self.assertIn('merged_'+db_name, avail_database_list)
+        merged_dbinfo = get_info(self,'merged_'+db_name)
+        self.assertEqual(merged_dbinfo[0], total_entries,'the number of entries in the merged database ' + 'merged_'+db_name + ' does not match the sum of the entries in the unmerged databases')
+        self.assertEqual(merged_dbinfo[1],total_templates,'the number of templates in the merged database ' + 'merged_'+db_name + ' does not match the sum of the templates in the unmerged databases')
+        self.assertEqual(merged_dbinfo[2],total_failed,'the number of failure cases in the merged database ' + 'merged_'+db_name + ' does not match the sum of the failures in the unmerged databases')
+        return merged_dbinfo,total_entries,total_templates,total_failed
+
+@unittest.skipIf( 1 not in RUN_TESTS,'Test 001 is not in the requested run stages')
+class Test001SigsetEnrollProbe(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        # print('DOES THIS REQUIRE DATABSE MERGE:',requires_database_merge)
+        if requires_database_merge:
+            print('The Test Suite has determined that your service will require auto-generation of partitioned databases while running enrollment tests')
+            global enroll_args
+            enroll_args += " --auto-create-database --database-suffix AS "
+        else:
+            print(
+                'The Test Suite has determined that your service will NOT require auto-generation of partitioned databases while running enrollment tests')
+
+        setUpClass_main(cls)
+
+    def test_01_sigset_enroll_probe(self):
+        print('Testing Probe Enrollment')
+
+        from briar.cli.sigset import sigset_enroll
+        from briar.cli.database.create import database_create
+        try:
+            input_command_create = "database create " + args_string + database_probe_name
+            print('Running test command:', input_command_create)
+            reply = database_create(input_command=input_command_create,ret=True)
+        except Exception as e:
+            print('WARNING: database already exists, you may want to delete the databases and rerun the test from scratch', database_gallery_1_name)
+        # self.assertTrue(reply is not None)
+        input_command = 'sigset-enroll' + args_string + media_args + enroll_args + ' --entry-type probe --database ' + database_probe_name + ' '+ self.probe_sigset_path + ' ' + DATASET_DIR
+        print('Running test command:', input_command)
+        enroll_reply = sigset_enroll(input_command=input_command)
+
+    def test_02_probe_checkpoint(self):
+        checkpoint_db(args_string, database_probe_name)
+        if requires_database_merge:
+            run_on_multi(self,database_probe_name,checkpoint_db)
+
+@unittest.skipIf( 2 not in RUN_TESTS,'Test 002 is not in the requested run stages')
+class Test002ProbeDatabaseMerge(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        setUpClass_main(cls)
+        # cls.merged_dbinfo = None
+        # cls.total_entries = None
+        # cls.total_templates = None
+        # cls.total_failed = None
+
+    def test_02_merge_probe_dbs(self):
+        if requires_database_merge:
+            merged_dbinfo,total_entries,total_templates,total_failed = merge_dbs(self,database_probe_name)
+
+            self.merged_dbinfo = merged_dbinfo
+            self.total_entries = total_entries
+            self.total_templates = total_templates
+            self.total_failed = total_failed
+            print('Merged database info:', self.merged_dbinfo, self.total_entries, self.total_templates, self.total_failed)
+            self.assertEqual(self.total_entries, len(self.probe_sigset),
+                             'the number of entries in the set of sub partition databases different than the number of entries in the probe sigset')
+            self.assertEqual(self.merged_dbinfo[0], len(self.probe_sigset),
+                             'the number of entries in the merged database is different than the number of entries in the probe sigset')
+
+
+        else:
+            from briar.cli.database.rename import database_rename
+            database_rename(input_command='database rename ' + args_string + database_probe_name + ' merged_'+database_probe_name )
+        entries, templates, failed = get_info(self, ' merged_' + database_probe_name)
+        self.assertEqual(entries, len(self.probe_sigset),
+                         'the number of entries in the database is different than the number of entries in the probe sigset')
+
+@unittest.skipIf( 3 not in RUN_TESTS,'Test 003 is not in the requested run stages')
+class Test003SigsetEnrollGalleries(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        # print('DOES THIS REQUIRE DATABSE MERGE:',requires_database_merge)
+        if requires_database_merge:
+            print('The Test Suite has determined that your service will require auto-generation of partitioned databases while running enrollment tests')
+            global enroll_args
+            enroll_args += " --auto-create-database --database-suffix AS "
+        else:
+            print(
+                'The Test Suite has determined that your service will NOT require auto-generation of partitioned databases while running enrollment tests')
+
+        setUpClass_main(cls)
+
+    def runGallery(self,gal_name,sigset_path):
+
+        from briar.cli.sigset import sigset_enroll
+        from briar.cli.database.create import database_create
+        try:
+            reply = database_create(input_command="database create " + args_string + gal_name, ret=True)
+        except Exception as e:
+            print('WARNING: database already exists, you may want to delete the databases and rerun the test from scratch', database_gallery_1_name)
+        # self.assertTrue(reply is not None)
+        enroll_reply = sigset_enroll(input_command='sigset-enroll' + args_string + media_args + enroll_args +' --entry-type gallery --batch-total 1 --database ' + gal_name + ' '+ sigset_path + ' ' + DATASET_DIR)
+
+    def test_01_sigset_enroll_gallery1(self):
+        print('Testing Gallery 1 Enrollment')
+        self.runGallery(database_gallery_1_name,self.gallery_1_sigset_path)
+    def test_02_gallery1_partitioned_checkpoint(self):
+        if requires_database_merge:
+            checkpoint_db(args_string,database_gallery_1_name)
+            run_on_multi(self,database_gallery_1_name,checkpoint_db)
+        else:
+            #we aren't running any type of merge over multiple databases, so we can just finalize the singular database
+            finalize_db(args_string, database_gallery_1_name)
+
+
+    def test_03_sigset_enroll_gallery2(self):
+        print('Testing Gallery 2 Enrollment')
+
+        self.runGallery(database_gallery_2_name,self.gallery_2_sigset_path)
+
+    def test_04_gallery2_partitioned_checkpoint(self):
+        if requires_database_merge:
+            checkpoint_db(args_string, database_gallery_2_name)
+            run_on_multi(self,database_gallery_2_name, checkpoint_db)
+        else:
+            # we aren't running any type of merge over multiple databases, so we can just finalize the singular database
+            finalize_db(args_string, database_gallery_2_name)
+
+@unittest.skipIf( 4 not in RUN_TESTS,'Test 004 is not in the requested run stages')
+class Test004GalleryDatabaseMerge(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        setUpClass_main(cls)
+
+    def test_01_merge_gallery1_dbs(self):
+        unique_subjects = np.unique([s[0] for s in self.gallery1_sigset['subjectId']])
+        if requires_database_merge:
+            merged_dbinfo, total_entries, total_templates, total_failed = merge_dbs(self,database_gallery_1_name)
+            self.assertEqual(total_entries, len(unique_subjects),
+                             'the number of entries in the set of sub partition databases different than the number of entries in the gallery1 sigset')
+            self.assertEqual(merged_dbinfo[0], len(unique_subjects),
+                             'the number of entries in the merged database is different than the number of entries in the gallery1 sigset')
+        else:
+            from briar.cli.database.rename import database_rename
+            database_rename(input_command='database rename ' + args_string + database_gallery_1_name + ' merged_'+database_gallery_1_name)
+        entries, templates, failed = get_info(self, ' merged_' + database_gallery_1_name)
+        self.assertEqual(entries, len(unique_subjects),
+                         'the number of entries in the database is different than the number of entries in the gallery1 sigset')
+
+    def test_02_merge_gallery2_dbs(self):
+        unique_subjects = np.unique([s[0] for s in self.gallery2_sigset['subjectId']])
+        if requires_database_merge:
+            merged_dbinfo, total_entries, total_templates, total_failed = merge_dbs(self, database_gallery_2_name)
+
+            self.assertEqual(total_entries, len(unique_subjects),
+                             'the number of entries in the set of sub partition databases different than the number of entries in the gallery2 sigset')
+            self.assertEqual(merged_dbinfo[0], len(unique_subjects),
+                             'the number of entries in the merged database is different than the number of entries in the gallery2 sigset')
+        else:
+            from briar.cli.database.rename import database_rename
+            database_rename(
+                input_command='database rename ' + args_string + database_gallery_2_name + ' merged_' + database_gallery_2_name)
+        entries, templates, failed = get_info(self, ' merged_' + database_gallery_2_name)
+        self.assertEqual(entries, len(unique_subjects),
+                         'the number of entries in the database is different than the number of entries in the gallery2 sigset')
+    def test_03_finalized_merged_gallery1_db(self):
+        finalize_db(args_string,'merged_'+database_gallery_1_name)
+    def test_04_finalized_merged_gallery2_db(self):
+        finalize_db(args_string,'merged_'+database_gallery_2_name)
+
+
+@unittest.skipIf( 5 not in RUN_TESTS,'Test 005 is not in the requested run stages')
+class Test005SigsetSearch(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        setUpClass_main(cls)
+
+
+    def test_01_sigset_search_probe_gallery1(self):
+        from briar.cli.database.compute_search import database_compute_search
+        # self.assertTrue(reply is not None)
+        search_reply = database_compute_search(input_command='compute-search --return-entry-id ' +USE_SINGLE_SUBJECT+ ' --search-database '+ 'merged_'+database_gallery_1_name +' --probe-database ' + 'merged_'+database_probe_name + ' --output-type pickle -o ' + os.path.join(OUTPUT_DIR,'validation_search_g1_face.pkl') + ' --probe-order-list ' + self.probe_sigset_path + ' ' + media_args + args_string )
+
+    def test_02_sigset_search_probe_gallery2(self):
+        from briar.cli.database.compute_search import database_compute_search
+        # self.assertTrue(reply is not None)
+        search_reply = database_compute_search(input_command='compute-search --return-entry-id ' +USE_SINGLE_SUBJECT+ ' --search-database '+ 'merged_'+database_gallery_2_name +' --probe-database ' + 'merged_'+database_probe_name + ' --output-type pickle -o ' + os.path.join(OUTPUT_DIR,'validation_search_g2_face.pkl') + ' --probe-order-list ' + self.probe_sigset_path + ' ' + media_args + args_string )
+
+@unittest.skipIf( 6 not in RUN_TESTS,'Test 006 is not in the requested run stages')
+class Test006SigsetVerify(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        setUpClass_main(cls)
+
+
+    def test_01_sigset_verify_probe_gallery1(self):
+        from briar.cli.database.compute_scores import database_compute_verify
+        # self.assertTrue(reply is not None)
+
+        verify_reply = database_compute_verify(input_command='compute-verify ' +USE_SINGLE_SUBJECT+ ' --reference-database '+ 'merged_'+database_gallery_1_name +' --verify-database ' + 'merged_'+database_probe_name + ' --output-type pickle -o ' + os.path.join(OUTPUT_DIR,'validation_scores_g1_face.pkl') + ' --gallery-data-filename ' + os.path.join(OUTPUT_DIR,'gallery_data_g1.csv') + ' ' + media_args + args_string + ' --verify-order-list ' + self.probe_sigset_path + ' --reference-order-list ' +self.gallery_1_sigset_path + ' ./')
+
+    def test_02_sigset_verify_probe_gallery2(self):
+        from briar.cli.database.compute_scores import database_compute_verify
+        # self.assertTrue(reply is not None)
+        verify_reply = database_compute_verify(input_command='compute-verify ' +USE_SINGLE_SUBJECT+ ' --reference-database '+ 'merged_'+database_gallery_2_name +' --verify-database ' + 'merged_'+database_probe_name + ' --output-type pickle -o ' + os.path.join(OUTPUT_DIR,'validation_scores_g2_face.pkl') + ' --gallery-data-filename ' + os.path.join(OUTPUT_DIR,'gallery_data_g2.csv') + ' ' + media_args + args_string + ' --verify-order-list ' + self.probe_sigset_path + ' --reference-order-list ' +self.gallery_2_sigset_path + ' ./')
+
+@unittest.skipIf( 7 not in RUN_TESTS,'Test 007 is not in the requested run stages')
+class Test007SigsetSearchGait(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        setUpClass_main(cls)
+
+
+    def test_01_sigset_search_gait_probe_gallery1(self):
+        from briar.cli.database.compute_search import database_compute_search
+        # self.assertTrue(reply is not None)
+        search_reply = database_compute_search(input_command='compute-search --modality gait --return-entry-id ' +USE_SINGLE_SUBJECT+ ' --search-database '+ 'merged_'+database_gallery_1_name +' --probe-database ' + 'merged_'+database_probe_name + ' --output-type pickle -o ' + os.path.join(OUTPUT_DIR,'validation_gait_search_g1_face.pkl') + ' --probe-order-list ' + self.probe_sigset_path + ' ' + media_args + args_string )
+
+    def test_02_sigset_search_gait_probe_gallery2(self):
+        from briar.cli.database.compute_search import database_compute_search
+        # self.assertTrue(reply is not None)
+        search_reply = database_compute_search(input_command='compute-search --modality gait --return-entry-id ' +USE_SINGLE_SUBJECT+ ' --search-database '+ 'merged_'+database_gallery_2_name +' --probe-database ' + 'merged_'+database_probe_name + ' --output-type pickle -o ' + os.path.join(OUTPUT_DIR,'validation_gait_search_g2_face.pkl') + ' --probe-order-list ' + self.probe_sigset_path + ' ' + media_args + args_string )
+
+@unittest.skipIf( 8 not in RUN_TESTS,'Test 008 is not in the requested run stages')
+class Test008SigsetVerifyGait(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        setUpClass_main(cls)
+
+
+    def test_01_sigset_verify_gait_probe_gallery1(self):
+        from briar.cli.database.compute_scores import database_compute_verify
+        # self.assertTrue(reply is not None)
+
+        verify_reply = database_compute_verify(input_command='compute-verify --modality gait ' +USE_SINGLE_SUBJECT+ ' --reference-database '+ 'merged_'+database_gallery_1_name +' --verify-database ' + 'merged_'+database_probe_name + ' --output-type pickle -o ' + os.path.join(OUTPUT_DIR,'validation_gait_scores_g1_face.pkl') + ' --gallery-data-filename ' + os.path.join(OUTPUT_DIR,'gallery_data_g1.csv') + ' ' + media_args + args_string + ' --verify-order-list ' + self.probe_sigset_path + ' --reference-order-list ' +self.gallery_1_sigset_path + ' ./')
+
+    def test_02_sigset_verify_gait_probe_gallery2(self):
+        from briar.cli.database.compute_scores import database_compute_verify
+        # self.assertTrue(reply is not None)
+        verify_reply = database_compute_verify(input_command='compute-verify --modality gait ' +USE_SINGLE_SUBJECT+ ' --reference-database '+ 'merged_'+database_gallery_2_name +' --verify-database ' + 'merged_'+database_probe_name + ' --output-type pickle -o ' + os.path.join(OUTPUT_DIR,'validation_gait_scores_g2_face.pkl') + ' --gallery-data-filename ' + os.path.join(OUTPUT_DIR,'gallery_data_g2.csv') + ' ' + media_args + args_string + ' --verify-order-list ' + self.probe_sigset_path + ' --reference-order-list ' +self.gallery_2_sigset_path + ' ./')
+
+@unittest.skipIf( 9 not in RUN_TESTS,'Test 009 is not in the requested run stages')
+class Test009SigsetSearchFace(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        setUpClass_main(cls)
+
+
+    def test_01_sigset_search_face_probe_gallery1(self):
+        from briar.cli.database.compute_search import database_compute_search
+        # self.assertTrue(reply is not None)
+        search_reply = database_compute_search(input_command='compute-search --modality face --return-entry-id ' +USE_SINGLE_SUBJECT+ ' --search-database '+ 'merged_'+database_gallery_1_name +' --probe-database ' + 'merged_'+database_probe_name + ' --output-type pickle -o ' + os.path.join(OUTPUT_DIR,'validation_face_search_g1_face.pkl') + ' --probe-order-list ' + self.probe_sigset_path + ' ' + media_args + args_string )
+
+    def test_02_sigset_search_face_probe_gallery2(self):
+        from briar.cli.database.compute_search import database_compute_search
+        # self.assertTrue(reply is not None)
+        search_reply = database_compute_search(input_command='compute-search --modality face --return-entry-id ' +USE_SINGLE_SUBJECT+ '--search-database '+ 'merged_'+database_gallery_2_name +' --probe-database ' + 'merged_'+database_probe_name + ' --output-type pickle -o ' + os.path.join(OUTPUT_DIR,'validation_face_search_g2_face.pkl') + ' --probe-order-list ' + self.probe_sigset_path + ' ' + media_args + args_string )
+
+
+@unittest.skipIf( 10 not in RUN_TESTS,'Test 010 is not in the requested run stages')
+class Test010SigsetVerifyFace(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        setUpClass_main(cls)
+
+
+    def test_01_sigset_verify_face_probe_gallery1(self):
+        from briar.cli.database.compute_scores import database_compute_verify
+        # self.assertTrue(reply is not None)
+
+        verify_reply = database_compute_verify(input_command='compute-verify --modality face ' +USE_SINGLE_SUBJECT+ ' --reference-database '+ 'merged_'+database_gallery_1_name +' --verify-database ' + 'merged_'+database_probe_name + ' --output-type pickle -o ' + os.path.join(OUTPUT_DIR,'validation_face_scores_g1_face.pkl') + ' --gallery-data-filename ' + os.path.join(OUTPUT_DIR,'gallery_data_g1.csv') + ' ' + media_args + args_string + ' --verify-order-list ' + self.probe_sigset_path + ' --reference-order-list ' +self.gallery_1_sigset_path + ' ./')
+
+    def test_02_sigset_verify_face_probe_gallery2(self):
+        from briar.cli.database.compute_scores import database_compute_verify
+        # self.assertTrue(reply is not None)
+        verify_reply = database_compute_verify(input_command='compute-verify --modality face ' +USE_SINGLE_SUBJECT+ ' --reference-database '+ 'merged_'+database_gallery_2_name +' --verify-database ' + 'merged_'+database_probe_name + ' --output-type pickle -o ' + os.path.join(OUTPUT_DIR,'validation_face_scores_g2_face.pkl') + ' --gallery-data-filename ' + os.path.join(OUTPUT_DIR,'gallery_data_g2.csv') + ' ' + media_args + args_string + ' --verify-order-list ' + self.probe_sigset_path + ' --reference-order-list ' +self.gallery_2_sigset_path + ' ./')
+
+
+@unittest.skipIf( 11 not in RUN_TESTS,'Test 011 is not in the requested run stages')
+
+class Test011SigsetSearchWholeBody(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        setUpClass_main(cls)
+
+
+    def test_01_sigset_search_WB_probe_gallery1(self):
+        from briar.cli.database.compute_search import database_compute_search
+        # self.assertTrue(reply is not None)
+        search_reply = database_compute_search(input_command='compute-search --modality whole_body --return-entry-id ' +USE_SINGLE_SUBJECT+ ' --search-database '+ 'merged_'+database_gallery_1_name +' --probe-database ' + 'merged_'+database_probe_name + ' --output-type pickle -o ' + os.path.join(OUTPUT_DIR,'validation_wholebody_search_g1_face.pkl') + ' --probe-order-list ' + self.probe_sigset_path + ' ' + media_args + args_string )
+
+    def test_02_sigset_search_WB_probe_gallery2(self):
+        from briar.cli.database.compute_search import database_compute_search
+        # self.assertTrue(reply is not None)
+        search_reply = database_compute_search(input_command='compute-search --modality whole_body --return-entry-id ' +USE_SINGLE_SUBJECT+ ' --search-database '+ 'merged_'+database_gallery_2_name +' --probe-database ' + 'merged_'+database_probe_name + ' --output-type pickle -o ' + os.path.join(OUTPUT_DIR,'validation_wholebody_search_g2_face.pkl') + ' --probe-order-list ' + self.probe_sigset_path + ' ' + media_args + args_string )
+
+
+@unittest.skipIf( 12 not in RUN_TESTS,'Test 012 is not in the requested run stages')
+class Test012SigsetVerifyWholeBody(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        setUpClass_main(cls)
+
+
+    def test_01_sigset_verify_WB_probe_gallery1(self):
+        from briar.cli.database.compute_scores import database_compute_verify
+        # self.assertTrue(reply is not None)
+
+        verify_reply = database_compute_verify(input_command='compute-verify --modality whole_body ' +USE_SINGLE_SUBJECT+ ' --reference-database '+ 'merged_'+database_gallery_1_name +' --verify-database ' + 'merged_'+database_probe_name + ' --output-type pickle -o ' + os.path.join(OUTPUT_DIR,'validation_wholebody_scores_g1_face.pkl') + ' --gallery-data-filename ' + os.path.join(OUTPUT_DIR,'gallery_data_g1.csv') + ' ' + media_args + args_string + ' --verify-order-list ' + self.probe_sigset_path + ' --reference-order-list ' +self.gallery_1_sigset_path + ' ./')
+
+    def test_02_sigset_verify_WB_probe_gallery2(self):
+        from briar.cli.database.compute_scores import database_compute_verify
+        # self.assertTrue(reply is not None)
+        verify_reply = database_compute_verify(input_command='compute-verify --modality whole_body ' +USE_SINGLE_SUBJECT+ ' --reference-database '+ 'merged_'+database_gallery_2_name +' --verify-database ' + 'merged_'+database_probe_name + ' --output-type pickle -o ' + os.path.join(OUTPUT_DIR,'validation_wholebody_scores_g2_face.pkl') + ' --gallery-data-filename ' + os.path.join(OUTPUT_DIR,'gallery_data_g2.csv') + ' ' + media_args + args_string + ' --verify-order-list ' + self.probe_sigset_path + ' --reference-order-list ' +self.gallery_2_sigset_path + ' ./')
+
+
+
+@unittest.skipIf( 13 not in RUN_TESTS,'Test 013 is not in the requested run stages')
+class Test013SigsetSearchOutputFormatting(unittest.TestCase):
+
+    def test_01_sigset_search_pickle_file(self):
+        self.search_file_check()
+    def test_02_sigset_search_gait_pickle_file(self):
+        self.search_file_check('gait')
+    def test_03_sigset_search_wb_pickle_file(self):
+        self.search_file_check('wholebody')
+    def test_04_sigset_search_face_pickle_file(self):
+        self.search_file_check('face')
+
+    def search_file_check(self,modality=''):
+        if len(modality) > 0:
+            modality = '_'+modality
+        search_file1 = os.path.join(OUTPUT_DIR, 'validation'+modality+'_search_g1_face.pkl')
+        search_file2 = os.path.join(OUTPUT_DIR, 'validation'+modality+'_search_g2_face.pkl')
+        self.assertTrue(os.path.exists(search_file1))
+        self.assertTrue(os.path.exists(search_file2))
+        self.assertTrue(os.path.isfile(search_file1))
+        self.assertTrue(os.path.isfile(search_file2))
+
+@unittest.skipIf( 14 not in RUN_TESTS,'Test 014 is not in the requested run stages')
+class Test014SigsetVerifyOutputFormatting(unittest.TestCase):
+
+    def test_01_sigset_verify_pickle_file(self):
+        self.score_file_check()
+    def test_02_sigset_verify_gait_pickle_file(self):
+        self.score_file_check('gait')
+    def test_02_sigset_verify_wb_pickle_file(self):
+        self.score_file_check('wholebody')
+    def test_02_sigset_verify_face_pickle_file(self):
+        self.score_file_check('face')
+    def score_file_check(self,modality=''):
+        if len(modality) > 0:
+            modality = '_'+modality
+        score_file1 = os.path.join(OUTPUT_DIR, 'validation'+modality+'_scores_g1_face.pkl')
+        score_file2 = os.path.join(OUTPUT_DIR, 'validation'+modality+'_scores_g2_face.pkl')
+        self.assertTrue(os.path.exists(score_file1))
+        self.assertTrue(os.path.exists(score_file2))
+        self.assertTrue(os.path.isfile(score_file1))
+        self.assertTrue(os.path.isfile(score_file2))
+def runall():
+    unittest.main()
+
+
+
+if __name__ == '__main__':
+    import sys
+    print(sys.argv)
+    # if len(sys.argv) > 1:
+    #     if sys.argv[1] == '-v':
+    # main(module=briar.tests.integration_test)
+    unittest.main()

@@ -1,5 +1,7 @@
 # BRIAR API
 
+## NOTE: DEPRICATED
+please refer to the briar-api-example for a more in-dept step-by-step instruction on how to implement the API using the SDK.
 
 ## Introduction
 

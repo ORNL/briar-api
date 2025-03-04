@@ -1,11 +1,11 @@
-import sys
-import os
-import optparse
-
 import briar
+import optparse
+import os
+import sys
 
-DEFAULT_MAX_MESSAGE_SIZE = 64*1024*1024*8 # 512MB
-DEFAULT_MAX_ASYNC = 8 # The maximum number of async client calls at a time.
+DEFAULT_MAX_MESSAGE_SIZE = 64 * 1024 * 1024 * 8  # 512MB
+DEFAULT_MAX_ASYNC = 8  # The maximum number of async client calls at a time.
+
 
 # def connectToBriarClient(options):
 #     """!
@@ -46,10 +46,17 @@ def addConnectionOptions(parser):
     connection_group.add_option("-p", "--port", type="str", dest="port", default=briar.DEFAULT_PORT,
                                 help="The port used for the recognition service.\n"
                                      "Default={}".format(briar.DEFAULT_PORT))
-    connection_group.add_option("--progress", action="store_true", dest="progress", default=None,
-                              help="Display progress of the job in the form of a progress bar")
+    connection_group.add_option("--progress", action="store_true", dest="progress", default=False,
+                                help="Display progress of the job in the form of a progress bar")
+    connection_group.add_option("--bgr", action="store_true", dest="bgr", default=False,
+                                help="When set, supplies BGR formatted images, instead of RGB")
+    connection_group.add_option("--path-map", type="str", dest="path_map",
+                                default="./BTS1/:BGC1/BTS1,./BTS2/:BGC2/BTS2,./BTS3/:BGC3/BTS3,./BTS1.1/:BGC1.1/BTS1.1,./BTS4/:BGC4/BTS4,./BTS5/:BGC5/BTS5",
+                                help="if a shared directory is mounted remotely on the server, this provides an alias mapping from file paths on the client to file paths on the server. Map is comma separated, key:value coded. E.g. dir1:dir1,dir2:dir2r")
     connection_group.add_option("--save-durations", action="store_true", dest="save_durations", default=False,
                                 help="Save separate durations files for each media file input")
+
     parser.add_option_group(connection_group)
 
-
+    "<client directory>:<corresponding server directory>"
+    "/media/briar:/datasets/bgc1/"

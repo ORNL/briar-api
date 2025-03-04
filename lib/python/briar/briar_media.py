@@ -2,14 +2,12 @@
 Defines a media class which acts as a wrapper for image and video files.
 """
 
+import briar.briar_grpc.briar_pb2
+import briar.briar_grpc.briar_pb2_grpc
 import cv2
 import numpy as np
 import os
-
 from briar.media_converters import *
-import briar.briar_grpc.briar_pb2
-import briar.briar_grpc.briar_pb2_grpc
-
 
 
 class MediaStream:
@@ -30,7 +28,7 @@ class BriarMedia():
     IMAGE_FORMATS = ['.bmp', 'dib', '.jpeg', '.jpg', '.jpe', '.jp2', '.png',
                      '.webp', '.pbm', '.pgm', '.ppm', '.pxm', '.pnm', '.sr',
                      '.ras', '.tiff', '.tif', '.exr', '.hdr', '.pic']
-    VIDEO_FORMATS = ['.avi', '.mp4','.mov','.m4v']
+    VIDEO_FORMATS = ['.avi', '.mp4', '.mov', '.m4v', '.ts']
     DATA_TYPES = dict(UINT8=0, UINT16=1, FLOAT32=2, URL=3, PNG=4, JPG=5, MJPG=6,
                       H264=7, H265=8)
 
@@ -72,6 +70,7 @@ class BriarMedia():
             self.datetime = datetime
             self.metadata = metadata
 
+
 def briar_media_from_pb2(pb2_object):
     media = BriarMedia()
     media.source = pb2_object.source
@@ -87,6 +86,7 @@ def briar_media_from_pb2(pb2_object):
     media.datetime = pb2_object.datetime
     media.metadata = pb2_object.metadata
     return media
+
 
 def briar_media_to_pb2(media):
     pb2_object = briar_pb2.BriarMedia()
@@ -104,11 +104,14 @@ def briar_media_to_pb2(media):
     pb2_object.metadata = media.metadata
     return pb2_object
 
+
 def load_media_from_image(image_path):
     raise NotImplementedError
 
+
 def load_media_from_folder(folder_path, recursive=False):
     raise NotImplementedError
+
 
 def load_media_from_numpy(numpy_array):
     raise NotImplementedError

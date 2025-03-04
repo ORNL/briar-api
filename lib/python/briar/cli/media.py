@@ -1,16 +1,14 @@
-
 ###################################################################
 # Common media handeling fuctions and classes
 ###################################################################
-import sys
-import os
-import optparse
-
-import pyvision as pv
-
 import briar
+import optparse
+import os
+import pyvision as pv
+import sys
 
 DEFAULT_MAX_SIZE = 1920
+
 
 def addMediaOptions(parser):
     """!
@@ -27,6 +25,16 @@ def addMediaOptions(parser):
     parser.add_option("--maximum-size", type="int", dest="max_size", default=DEFAULT_MAX_SIZE,
                       help="If too large, images will be scaled to have this maximum size. Default=%d" % (
                           DEFAULT_MAX_SIZE))
+    parser.add_option("--max-frames", type="int", dest="max_frames", default=-1,
+                            help="Maximum frames to extract from a video (leave unset or -1 to use all given frames)")
+    parser.add_option("--start-frame", type="int", dest="start_frame", default=-1,
+                            help="Start of frame range to extract from a video (leave unset or -1 to use all given frames)")
+    parser.add_option("--stop-frame", type="int", dest="stop_frame", default=-1,
+                            help="Stop of frame range to extract from a video (leave unset or -1 to use all given frames)")
+    parser.add_option("--context", type="choice", choices=['controlled', 'uncontrolled'],
+                      dest="context", default="uncontrolled",
+                      help="Provides information on the environment in which the media was collected")
+
 
     # TODO implement some/all options below
     # detector_group.add_option("-d", "--detections-csv", type="str", dest="detections_csv", default=None,
@@ -89,7 +97,7 @@ def collect_files(args, options, extension=None):
                         image_list.append(os.path.join(path, filename))
                     elif pv.isVideo(filename):
                         video_list.append(os.path.join(path, filename))
-                    elif extension is not None and hasExtension(filename,extension):
+                    elif extension is not None and hasExtension(filename, extension):
                         csv_list.append(os.path.join(path, filename))
 
         elif os.path.isfile(media):
@@ -97,7 +105,7 @@ def collect_files(args, options, extension=None):
                 image_list.append(media)
             elif pv.isVideo(media):
                 video_list.append(media)
-            elif extension is not None and hasExtension(media,extension):
+            elif extension is not None and hasExtension(media, extension):
                 csv_list.append(media)
             else:
                 raise ValueError("The file {} is not in a supported image or video type.".format(media))
@@ -116,8 +124,9 @@ def collect_files(args, options, extension=None):
     else:
         return csv_list
 
-def hasExtension(f,extension):
-    if isinstance(extension,list):
+
+def hasExtension(f, extension):
+    if isinstance(extension, list):
         for ext in extension:
             if f.endswith(ext):
                 return True

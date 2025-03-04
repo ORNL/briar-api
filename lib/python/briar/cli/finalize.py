@@ -1,13 +1,11 @@
-import sys
-import os
-import optparse
-
-import pyvision as pv
-
+import asyncio
 import briar
 import briar.briar_client as briar_client
+import optparse
+import os
+import pyvision as pv
+import sys
 from briar.cli.connection import addConnectionOptions
-
 
 
 def finalizeParseOptions(inputCommand=None):
@@ -19,14 +17,14 @@ def finalizeParseOptions(inputCommand=None):
     """
     args = ['[database_name]']
     n_args = len(args)
-    description =   "Finalize the given database and save to disk.  This could " + \
-                    "take a long time and may build complex data structures.  " + \
-                    "After a database is finalized it will not be modified"
+    description = "Finalize the given database and save to disk.  This could " + \
+                  "take a long time and may build complex data structures.  " + \
+                  "After a database is finalized it will not be modified"
     epilog = "Created by Joel Brogan - broganjr@ornl.gov"
     version = briar.__version__
 
     parser = optparse.OptionParser(usage="{} finalize [OPTIONS] {}".format('python -m briar', args),
-                                   version=version, description=description, epilog=epilog,conflict_handler="resolve")
+                                   version=version, description=description, epilog=epilog, conflict_handler="resolve")
     parser.add_option("-D", "--database", type="str", dest="database", default=None,
                       help="Select the database to enroll into.")
     addConnectionOptions(parser)
@@ -53,16 +51,16 @@ def finalizeParseOptions(inputCommand=None):
     return options, args
 
 
-
-def database_finalize(options=None,args=None):
+def database_finalize(options=None, args=None,input_command=None,ret=False):
     """!
     Parses the command line options and saves the database to disk
     @return: None - results are written to disk to a location specified by options
     """
     if options is None and args is None:
-       options, args = finalizeParseOptions()
+        options, args = finalizeParseOptions(input_command)
     client = briar_client.BriarClient(options)
 
-    client.finalize(args[-1])
+    reply = client.finalize(args[-1])
+    if ret:
+        return reply
     print('Database finalize complete.')
-

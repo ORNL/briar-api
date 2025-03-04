@@ -4,28 +4,12 @@
 
 | Name | Organization |
 | ------ | ------ |
+| Joel Brogan | Oak Ridge National Laboratory |
 | Deniz Aykac | Oak Ridge National Laboratory |
 | David Bolme | Oak Ridge National Laboratory |
-| Joel Brogan | Oak Ridge National Laboratory |
 | Ian Shelley | Oak Ridge National Laboratory |
 | Bob Zhang | Oak Ridge National Laboratory |
 
-<!-- Developing a BRIAR Service (External File)
-   * Introduction
-   * How the gRPC works in a nutshell (And also the BRIAR API)
-   * Building Stubs
-   * Submitting Containers
-     * docker
-     * singularity
-     * Starting your container
-   * Testing your algorithms using the API
-   * Version Requirements
-     * Phase 1
-     * Phase 2
-     * Phase 3
-   * Quick Reference
-
- -->
 
 
 ## Table of Contents

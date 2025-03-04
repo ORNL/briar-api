@@ -1,26 +1,25 @@
-import sys
-import os
-import optparse
-
-import briar.media_converters as media_converters
-import pyvision as pv
-
+import asyncio
 import briar
 import briar.briar_client as briar_client
-from briar.cli.connection import addConnectionOptions
-import time
-import briar.grpc_json as grpc_json
-
 import briar.briar_grpc.briar_pb2 as briar_pb2
 import briar.briar_grpc.briar_service_pb2 as srvc_pb2
 import briar.briar_media as briar_media
-from briar.media_converters import image_cv2proto
-
+import briar.grpc_json as grpc_json
+import briar.media_converters as media_converters
+import optparse
+import os
+import pyvision as pv
+import sys
+import time
+from briar import timing
+from briar.cli.connection import addConnectionOptions
 from briar.cli.media import addMediaOptions
 from briar.cli.media import collect_files
 from briar.media import BriarProgress
-from briar import timing
+from briar.media_converters import image_cv2proto, pathmap_str2dict, pathmap_path2remotepath
+
 DETECTION_FILE_EXT = ".detection"
+
 
 def addDetectorOptions(parser):
     """!
@@ -32,19 +31,19 @@ def addDetectorOptions(parser):
                                           "Configuration for the detectors.")
     detector_group.add_option("--detect-algorithm", type="str", dest="detect_algorithm_id", default=None,
                               help="Select the detection algorithm to use.")
-    
+
     detector_group.add_option("--detect-best", action="store_true", dest="detect_best", default=None,
                               help="Return only the 'best' (highest scoring) face/body in the image.")
 
     detector_group.add_option("--detect-face-thresh", type="float", dest="detect_face_thresh", default=None,
                               help="The threshold for face detection.")
-    
+
     detector_group.add_option("--detect-body-thresh", type="float", dest="detect_body_thresh", default=None,
                               help="The threshold for body detection.")
-    
+
     detector_group.add_option("--detect-face-min-height", type="int", dest="detect_face_min_height", default=None,
                               help="Limit the size of the smallest face detections.")
-    
+
     detector_group.add_option("--detect-body-min-height", type="int", dest="detect_body_min_height", default=None,
                               help="Limit the size of the smallest body detections.")
 
@@ -56,21 +55,22 @@ def addDetectorOptions(parser):
 
     detector_group.add_option("--return-media", action="store_true", dest="return_media", default=False,
                               help="Enables returning of media from workers to the client - will significantly increase output file sizes!")
+    detector_group.add_option("--max-frames", type="int", dest="max_frames", default=-1,
+                            help="Maximum frames to extract from a video (leave unset or -1 to use all given frames)")
 
     # detector_group.add_option("-o", "--output-dir", type="str", dest="output_dir", default=None,
     #                   help="Specify the output directory of .detection, .tracklet, and .template files.  If left unset, files will save to input file directory")
 
-    detector_group.add_option("-m","--modality", type="choice", choices=['unspecified', 'whole_body', 'face', 'gait','all'], dest="modality",
-                                default="face",
-                                                            help="Choose a biometric modality to detect/extract/enroll. Default=all")
+    detector_group.add_option("-m", "--modality", type="choice",
+                              choices=['unspecified', 'whole_body', 'face', 'gait', 'all'], dest="modality",
+                              default="all",
+                              help="Choose a biometric modality to detect/extract/enroll. Default=all")
     # detector_group.add_option("--detect-attributes", type="str", dest="attribute_filter", default=None,
     #                           help="A comma seperated list of additional attributes to pass to the algorithm. key1=value1,key2=value2,..."
 
-   
     parser.add_option_group(detector_group)
 
     addTrackingOptions(parser)
-
 
 
 def addTrackingOptions(parser):
@@ -80,21 +80,21 @@ def addTrackingOptions(parser):
     @param parser optparse.OptionParser: A parser to modify in place by adding options
     """
     tracker_group = optparse.OptionGroup(parser, "Tracking Options",
-                                          "Configuration for the tracking algorithm.")
+                                         "Configuration for the tracking algorithm.")
 
     tracker_group.add_option("--tracking-algorithm", type="str", dest="tracking_algorithm_id", default=None,
-                              help="Select the detection algorithm to use.")
-    
+                             help="Select the detection algorithm to use.")
+
     tracker_group.add_option("--tracking-disable", action="store_true", dest="tracking_disable", default=None,
-                              help="Disable tracking and process videos on a frame by frame basis.")
+                             help="Disable tracking and process videos on a frame by frame basis.")
 
     tracker_group.add_option("--tracking-threshold", type="float", dest="tracking_thresh", default=None,
-                              help="The threshold for face detection.")
-    
+                             help="The threshold for face detection.")
+
     # tracker_group.add_option("--detect-attributes", type="str", dest="attribute_filter", default=None,
     #                           help="A comma seperated list of additional attributes to pass to the algorithm. key1=value1,key2=value2,..."
     tracker_group.add_option("--tracking-batch", type="int", dest="tracking_batch", default=-1,
-                              help="How many frames per batch. Negative batch size denotes frame-wise streaming. Default = -1")
+                             help="How many frames per batch. Negative batch size denotes frame-wise streaming. Default = -1")
     parser.add_option_group(tracker_group)
 
 
@@ -107,17 +107,17 @@ def detectParseOptions(inputCommand=None):
     args = ['[image] [video] [image_directory] [...]']  # Add the names of arguments here.
     n_args = len(args)
     args = " ".join(args)
-    description =   "Run detection on a collection of images and videos. " + \
-                    "This command scans media and directories from the commandline " + \
-                    "for known media types and runs detection and tracking on those files. " + \
-                    "Results are saved as csv files in the output directory."
+    description = "Run detection on a collection of images and videos. " + \
+                  "This command scans media and directories from the commandline " + \
+                  "for known media types and runs detection and tracking on those files. " + \
+                  "Results are saved as csv files in the output directory."
     epilog = '''Created by David Bolme (bolmeds@ornl.gov) and Joel Brogan (broganjr@ornl.gov)'''
 
     version = briar.__version__
 
     # Setup the parser
     parser = optparse.OptionParser(usage='%s detect [OPTIONS] %s' % ('python -m briar', args),
-                                   version=version, description=description, epilog=epilog,conflict_handler="resolve")
+                                   version=version, description=description, epilog=epilog, conflict_handler="resolve")
 
     parser.add_option("-v", "--verbose", action="store_true", dest="verbose", default=False,
                       help="Print out more program information.")
@@ -125,11 +125,11 @@ def detectParseOptions(inputCommand=None):
     parser.add_option("-o", "--out-dir", type="str", dest="out_dir", default=None,
                       help="Output Directory: defaults to media_directory.")
     parser.add_option("--no-save", action="store_true", dest="no_save", default=False,
-                              help="Disables saving of results on the client-side")
+                      help="Disables saving of results on the client-side")
 
-    addConnectionOptions(parser) # -> initialize client connection
-    addDetectorOptions(parser)   # -> protobuf DetectorOptions 
-    addMediaOptions(parser)    
+    addConnectionOptions(parser)  # -> initialize client connection
+    addDetectorOptions(parser)  # -> protobuf DetectorOptions
+    addMediaOptions(parser)
 
     # Parse the arguments and return the results.
     if inputCommand is not None:
@@ -148,43 +148,44 @@ def detectParseOptions(inputCommand=None):
 
     return options, args
 
+
 def detect_options2proto(options):
     '''
     Parse command line options and populate a proto object for grpc
     '''
 
     detect_options = briar_pb2.DetectionOptions()
-    
+
     val = options.detect_algorithm_id
     if val is not None:
         detect_options.algorithm_id.override_default = True
         detect_options.algorithm_id.value = val
-        
+
     val = options.detect_best
     if val is not None:
         detect_options.best.override_default = True
         detect_options.best.value = val
-        
+
     val = options.detect_face_thresh
     if val is not None:
         detect_options.face_threshold.override_default = True
         detect_options.face_threshold.value = val
-        
+
     val = options.detect_body_thresh
     if val is not None:
         detect_options.body_threshold.override_default = True
         detect_options.body_threshold.value = val
-        
+
     val = options.detect_face_min_height
     if val is not None:
         detect_options.face_min_height.override_default = True
         detect_options.face_min_height.value = val
-        
+
     val = options.detect_body_min_height
     if val is not None:
         detect_options.body_min_height.override_default = True
         detect_options.body_min_height.value = val
-        
+
     val = options.detect_metadata
     if val is not None:
         detect_options.enable_metadata.override_default = True
@@ -201,12 +202,14 @@ def detect_options2proto(options):
     if val is not None:
         detect_options.return_media.value = val
 
-    
+
+
     tracking_options = tracking_options2proto(options)
 
     detect_options.tracking_options.CopyFrom(tracking_options)
 
     return detect_options
+
 
 def tracking_options2proto(options):
     '''
@@ -214,17 +217,17 @@ def tracking_options2proto(options):
     '''
 
     tracking_options = briar_pb2.TrackingOptions()
-    
+
     val = options.tracking_algorithm_id
     if val is not None:
         tracking_options.algorithm_id.override_default = True
         tracking_options.algorithm_id.value = val
-        
+
     val = options.tracking_thresh
     if val is not None:
         tracking_options.threshold.override_default = True
         tracking_options.threshold.value = val
-            
+
     val = options.tracking_disable
     if val is not None:
         tracking_options.tracking_disable.override_default = True
@@ -238,17 +241,18 @@ def tracking_options2proto(options):
     if val is not None:
         tracking_options.return_media.value = val
 
+    val = options.path_map
+
     # StringOption algorithm_id = 1; // uid corresponding to which algorithm to use
-	# BoolOption tracking_disable = 2;     // min score for candidate consideration
-	# FloatOption threshold = 3;     // min score for candidate consideration
+    # BoolOption tracking_disable = 2;     // min score for candidate consideration
+    # FloatOption threshold = 3;     // min score for candidate consideration
     # // FloatOption encoding = 4;
-	# repeated Attribute attributes = 5;    // Used for passing algorithm specific or custom options
+    # repeated Attribute attributes = 5;    // Used for passing algorithm specific or custom options
 
-    return tracking_options 
+    return tracking_options
 
 
-
-def detect(options=None,args=None):
+def detect(options=None, args=None,input_command=None,ret=False):
     """!
     Using the options specified in the command line, runs a detection on the specified files. Writes results to disk
     to a location specified by the cmd arguments
@@ -257,7 +261,7 @@ def detect(options=None,args=None):
     """
     api_start = time.time()
     if options is None and args is None:
-        options, args = detectParseOptions()
+        options, args = detectParseOptions(input_command)
 
     client = briar_client.BriarClient(options)
 
@@ -280,51 +284,65 @@ def detect(options=None,args=None):
                                                                   len(video_list)))
         if options.out_dir:
             out_dir = options.out_dir
-            os.makedirs(out_dir,exist_ok=True)
+            os.makedirs(out_dir, exist_ok=True)
 
         i = 0
-        batch_start_time = api_end =time.time()#api_end-api_start = total time API took to find files and initialize
+        batch_start_time = api_end = time.time()  # api_end-api_start = total time API took to find files and initialize
         for media_file in media_list:
-            #run detections
+            # run detections
             request_start = time.time()
             media_ext = os.path.splitext(media_file)
             media_name = os.path.basename(media_ext[0])
             media_ext = media_ext[-1]
-
-            replies = client.detect(detect_file_iter([media_file],detect_options,request_start=request_start))
-            pbar = BriarProgress(options,name='Detecting')
+            it = briar.media.file_iter([media_file], options, {"detect_options": detect_options},
+                                       request_start=request_start, requestConstructor=detectRequestConstructor)
+            replies = client.detect(it)
+            pbar = BriarProgress(options, name='Detecting')
             durations = []
-            for i,reply in enumerate(replies):
-                reply.durations.grpc_inbound_transfer_duration.end = time.time()
-                length = reply.progress.totalSteps
-                pbar.update(total=length,current=reply.progress.currentStep)
-                # run detections
-                dets = reply.detections
-                durs = reply.durations
-                durations.append(durs)
-                # media_file = media_list[0]
-                # results.append([media_list, dets, durs])
-                if not options.no_save:
-                    save_detections(media_file,reply,options,i,modality=options.modality)
+            prev_duration = None
+            for i, reply in enumerate(replies):
+                if options.max_frames > 0 and i >= options.max_frames:
+                    break
+                if not isFinalReply(reply):
 
-                if options.verbose and not options.progress:
-                    print("Detected {} in {}s".format(os.path.basename(media_file),
-                                                        timing.timeElapsed(durs.total_duration)))
+                    reply.durations.grpc_inbound_transfer_duration.end = time.time()
+                    length = reply.progress.totalSteps
+                    pbar.update(total=length, current=reply.progress.currentStep)
+                    if reply.progress_only_reply:
+                        durs = reply.durations
+                        durs.total_duration.end = time.time()
+                    else:
+                        # run detections
+                        dets = reply.detections
+                        durs = reply.durations
+
+                        durations.append(durs)
+                        # media_file = media_list[0]
+                        # results.append([media_list, dets, durs])
+                        if not options.no_save:
+                            save_detections(media_file, reply, options, i, modality=options.modality)
+                        durs.total_duration.end = time.time()
+                        if options.verbose and not options.progress:
+                            client.print_verbose("Detected {} detections in {} seconds for file {}"
+                                               "".format(len(reply.detections),
+                                                         timing.timeElapsed(durs.total_duration),os.path.basename(media_file)))
+                        if ret:
+                            yield reply
                 i += 1
-                # timing.print_durations(durs)
             all_durations[media_file] = briar_pb2.BriarDurationsList()
             all_durations[media_file].durations_list.extend(durations)
             if options.save_durations:
-                timing.save_durations(media_file,all_durations[media_file],options,"detect")
+                timing.save_durations(media_file, all_durations[media_file], options, "detect")
 
         if options.verbose:
             print("Finished {} files in {} seconds".format(len(media_list),
-                                                               time.time()-batch_start_time))
+                                                           time.time() - batch_start_time))
 
     else:
         print("Error. No image or video media found.")
 
-def get_detection_path(media_file,options,i,modality=None,media_id=None):
+
+def get_detection_path(media_file, options, i, modality=None, media_id=None):
     media_ext = os.path.splitext(media_file)[-1]
     if modality is not None:
         modality = "_" + modality
@@ -347,16 +365,17 @@ def get_detection_path(media_file,options,i,modality=None,media_id=None):
     det_path = os.path.join(out_dir, det_name)
     return det_path
 
-def save_detections(media_file,reply,options,i,modality=None,media_id=None):
+
+def save_detections(media_file, reply, options, i, modality=None, media_id=None):
     dets = reply.detections
     if len(dets) > 0:
         media_ext = os.path.splitext(media_file)[-1]
         if modality is not None:
-            modality = "_"+modality
+            modality = "_" + modality
         else:
             modality = ""
         if media_id is not None:
-            media_id = "_"+media_id
+            media_id = "_" + media_id
         else:
             media_id = ""
         det_name = os.path.splitext(os.path.basename(media_file))[0] + modality + media_id + DETECTION_FILE_EXT
@@ -367,94 +386,37 @@ def save_detections(media_file,reply,options,i,modality=None,media_id=None):
             out_dir = options.out_dir
 
         if is_video:
-            out_dir = os.path.join(out_dir, det_name+'s')
+            out_dir = os.path.join(out_dir, det_name + 's')
 
-            det_name = os.path.splitext(os.path.basename(media_file))[0] + '_' + str(i).zfill(6) + modality + DETECTION_FILE_EXT
-        if not os.path.exists(out_dir):
-            os.makedirs(out_dir)
+            det_name = os.path.splitext(os.path.basename(media_file))[0] + '_' + str(i).zfill(
+                6) + modality + DETECTION_FILE_EXT
+        if not options.no_save:
+            if not os.path.exists(out_dir):
+                os.makedirs(out_dir)
+            det_path = os.path.join(out_dir, det_name)
+            if options.verbose:
+                print('saved detections to :', det_path)
+            grpc_json.save(reply, det_path)
 
-        det_path = os.path.join(out_dir, det_name)
-        if options.verbose:
-            print('saved detections to :', det_path)
-        grpc_json.save(reply, det_path)
-
-def detect_file_iter(media_files,detect_options=None,verbose=False,request_start = -1):
-    """!
-    Iterates the paths in the media file list, loading them one by one and yielding grpc detect requests
-
-    @param media_files list(str): Paths to the media files to enroll from
-
-    @param options briar_pb2.DetectionOptions: Command line options in protobuf format which control detection functionality
-
-    @yield: briar_service_pb2.DetectRequest
-    """
-
-    if detect_options is None:
-        detect_options = briar_pb2.DetectionOptions()
-
-    media_enum = zip(media_files)
-
-    for i,iteration in enumerate(media_enum):
-        # Dynamically break the iteration into individual components
-
-        media_file = iteration[0]
-        media_ext = os.path.splitext(media_file)[-1]
-        if verbose or True:
-            print("Detecting:", media_file)
-
-        if media_ext.lower() in briar_media.BriarMedia.IMAGE_FORMATS:
-            # Create an enroll request for an image
-            frame = pv.Image(media_file)
-            media = image_cv2proto(frame.asOpenCV2())
-            media.source = os.path.abspath(media_file)
-            media.frame_count = 1
-            durations = briar_pb2.BriarDurations()
-            durations.client_duration_file_level.start = request_start
-            durations.total_duration.start = request_start
-
-            req = srvc_pb2.DetectRequest(
-                media=media,
-                frame=1,
-                # entry_id=detect_options.entry_id,
-                # entry_type=detect_options.entry_type,
-                # subject_name=detect_options.entry_name,
-                durations=durations,
-                detect_options=detect_options
-
-            )
-            it_end = time.time()
-            req.durations.client_duration_file_level.end = it_end
-            req.durations.grpc_outbound_transfer_duration.start = it_end
-            req.detect_options.tracking_options.tracking_disable.value = True
-            yield req
-
-        elif media_ext.lower() in briar_media.BriarMedia.VIDEO_FORMATS:
-            # Create an enroll request for a video
-            video = pv.Video(media_file)
-            file_level_client_time_end = time.time()
-            for frame_num, frame in enumerate(video):
-                durations = briar_pb2.BriarDurations()
-                if frame_num == 0:  # if this is the first frame, include the durations for the file-level operations of the BRIAR client API
-                    durations.client_duration_file_level.start = request_start
-                    durations.client_duration_file_level.end = file_level_client_time_end
-                durations.client_duration_frame_level.start = time.time()
-                durations.total_duration.start = request_start
-                media = image_cv2proto(frame.asOpenCV2())
-                media.source = os.path.abspath(media_file)
-                media.frame_number = frame_num
-                media.frame_count = int(video._numframes)  # NOTE len(video) raises an error
-                req = srvc_pb2.DetectRequest(
-                    media=media,
-                    frame=frame_num,
-                    # entry_id=detect_options.entry_id,
-                    # entry_type=detect_options.entry_type,
-                    # subject_name=detect_options.entry_name,
-                    durations=durations,
-                    detect_options=detect_options
-                )
-                if detect_options is None:
-                    req.detect_options.tracking_options.tracking_disable.value = False
-                it_time = time.time()
-                req.durations.client_duration_frame_level.end = it_time
-                req.durations.grpc_outbound_transfer_duration.start = it_time
-                yield req
+def isFinalReply(reply : srvc_pb2.DetectReply):
+    # return False
+    if reply.durations.client_duration_frame_level.start == 0 and reply.durations.client_duration_frame_level.end == 0:
+        return True
+    else:
+        return False
+def detectRequestConstructor(media: briar_pb2.BriarMedia, durations: briar_pb2.BriarDurations, options_dict={},
+                             det_list_list=None, database_name: str = None):
+    durations.client_duration_frame_level.start = time.time()
+    detect_options = options_dict['detect_options']
+    req = srvc_pb2.DetectRequest(
+        media=media,
+        frame=media.frame_number,
+        # entry_id=detect_options.entry_id,
+        # entry_type=detect_options.entry_type,
+        # subject_name=detect_options.entry_name,
+        durations=durations,
+        detect_options=detect_options
+    )
+    if media.source_type == briar_pb2.BriarMedia.DataType.GENERIC_IMAGE:
+        req.detect_options.tracking_options.tracking_disable.value = True
+    return req

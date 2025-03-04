@@ -1,95 +1,122 @@
+import briar.grpc_json
 import os.path
 import sys
+from briar import dyn_import
 
-import briar.grpc_json
-from  briar import dyn_import
-from colorama import Fore, Back, Style
+use_colorama = False
+try:
+    from colorama import Fore, Back, Style
+
+    use_colorama = True
+except:
+    print('Warning: Colorama not installed')
+
+
+    class Fore:
+        RED = ''
+        YELLOW = ''
+        GREEN = ''
+        BLUE = ''
+        RESET = ''
+
+
+    use_colorama = False
+
 import cv2
 import numpy as np
 from briar.briar_grpc import briar_pb2
 from briar import timing
+
+
 class BriarTestResult:
-    def __init__(self,name,passed,reason=None,level = 0):
+    def __init__(self, name, passed, reason=None, level=0):
         self.name = name
         self.passed = passed
         self.reason = reason
         self.level = level
 
+
 class BriarTest:
 
-
     def __init__(self):
-        if "BRIAR_TESTDATA_DIR" in os.environ:
-            self.testdata_folder = os.environ["BRIAR_TESTDATA_DIR"]
-            # testdata_folder = "/Users/2r6/Projects/briar/briar-testdata/"
-        else:
-            print("ERROR: environment variable BRIAR_TESTDATA_DIR not set.  Please set this variable to run API integration tests")
-            exit(1)
+        pass
+        # if "BRIAR_TESTDATA_DIR" in os.environ:
+        #     self.testdata_folder = os.environ["BRIAR_TESTDATA_DIR"]
+        #     # testdata_folder = "/Users/2r6/Projects/briar/briar-testdata/"
+        # else:
+        #     print(
+        #         "ERROR: environment variable BRIAR_TESTDATA_DIR not set.  Please set this variable to run API integration tests")
+        #     exit(1)
             # assert "BRIAR_TESTDATA_DIR" in sys.path
 
     def run(self):
         return True
+
     def test(self):
         functions = dir(self)
         test_functions = []
         test_order = []
         for f in functions:
             if f.startswith("test_"):
-                testname = type(self).__name__.replace('test_','')
+                testname = type(self).__name__.replace('test_', '')
                 order = int(f.split('_')[1])
                 test_order.append(order)
-                test_functions.append({"func": getattr(type(self),f),'name':testname,'obj':self})
+                test_functions.append({"func": getattr(type(self), f), 'name': testname, 'obj': self})
                 # print(testname)
-        test_order = np.array(test_order,dtype=np.int).argsort()
+        test_order = np.array(test_order, dtype=np.int).argsort()
         test_functions = np.array(test_functions)[test_order]
 
         reportcard = []
         for funcs in test_functions:
-            print('Performing test: ',funcs['name'])
+            print('Performing test: ', funcs['name'])
             output = funcs['func'](funcs['obj'])
             funcname = funcs['func'].__name__
             print(funcname)
             if output is None or output is False:
-                print(Fore.RED + 'Fail' + Fore.RESET)
-
-
+                if use_colorama:
+                    print(Fore.RED + 'Fail' + Fore.RESET)
+                else:
+                    print("Fail")
 
             for subtestName in output:
                 result = output[subtestName]
-                isinstance(result,dict)
-                if result is None or (isinstance(result,dict) and result['result'] is None) or (isinstance(result,dict) and result['result'] is False):
-                    print(subtestName + ": " + Fore.RED + 'Fail:'+Fore.RESET)
-                    if isinstance(result,dict) and 'reason' in result:
+                isinstance(result, dict)
+                if result is None or (isinstance(result, dict) and result['result'] is None) or (
+                        isinstance(result, dict) and result['result'] is False):
+                    print(subtestName + ": " + Fore.RED + 'Fail:' + Fore.RESET)
+                    if isinstance(result, dict) and 'reason' in result:
                         print(result['reason'])
-                    reportcard.append([funcs['name'],funcname,subtestName,False])
-                elif  isinstance(result['result'],str) and result['result'].lower() == 'warning':
+                    reportcard.append([funcs['name'], funcname, subtestName, False])
+                elif isinstance(result['result'], str) and result['result'].lower() == 'warning':
                     reportcard.append([funcs['name'], funcname, subtestName, 'warning'])
                     print(subtestName + ": " + Fore.YELLOW + 'Warning' + Fore.RESET)
                     if isinstance(result, dict) and 'reason' in result:
                         print(result['reason'])
                 elif result['result'] is True:
-                    reportcard.append([funcs['name'],funcname,subtestName, True])
+                    reportcard.append([funcs['name'], funcname, subtestName, True])
                     print(subtestName + ": " + Fore.GREEN + 'Success' + Fore.RESET)
                     if isinstance(result, dict) and 'reason' in result:
                         print(result['reason'])
         print(Fore.RESET)
 
-        print('A Summary of all ',type(self).__name__,": ")
+        print('A Summary of all ', type(self).__name__, ": ")
         testfuncname = None
         for r in reportcard:
             curfuncname = r[1]
             if not curfuncname == testfuncname:
-                print(curfuncname,":")
+                print(curfuncname, ":")
                 testfuncname = curfuncname
 
-            if isinstance(r[3],str) and r[3].lower() == 'warning':
-                print("\t"+r[2] + ": " + Fore.YELLOW + 'Passed with warning' + Fore.RESET)
+            if isinstance(r[3], str) and r[3].lower() == 'warning':
+                print("\t" + r[2] + ": " + Fore.YELLOW + 'Passed with warning' + Fore.RESET)
             elif r[3] is True:
-                print("\t"+r[2]+": " + Fore.GREEN + 'Passed' + Fore.RESET)
+                print("\t" + r[2] + ": " + Fore.GREEN + 'Passed' + Fore.RESET)
             else:
-                print("\t"+r[2]+": " + Fore.RED + 'Failed' + Fore.RESET)
+                print("\t" + r[2] + ": " + Fore.RED + 'Failed' + Fore.RESET)
+
     def description(self):
         return 'A Generic Test'
+
 
 class DetectTest(BriarTest):
     testim_path = "testdata/BTS1/distractors/G00038/controlled/images_jpg/face/G00038_set2_face0_03_45_662fb70a.jpg"
@@ -97,7 +124,8 @@ class DetectTest(BriarTest):
 
     def description(self):
         return 'Unit tests for Detection Functions'
-    def test_1_detection_image(self,testim_path=None,output_path=None,return_media=False):
+
+    def test_1_detection_image(self, testim_path=None, output_path=None, return_media=False):
         subtests = {}
         import briar.cli.detect as cli_detect
         if testim_path is None:
@@ -107,27 +135,29 @@ class DetectTest(BriarTest):
 
         self.detection_file_path = os.path.join(output_path, os.path.basename(testim_path).split('.')[
             0] + cli_detect.DETECTION_FILE_EXT)
-        opstring = "detect -o " + output_path +" "+ os.path.join(self.testdata_folder,testim_path)
+        opstring = "detect -o " + output_path + " " + os.path.join(self.testdata_folder, testim_path)
         if return_media:
             opstring = "detect -o " + output_path + " --return-media " + os.path.join(self.testdata_folder, testim_path)
-        options,args = cli_detect.detectParseOptions(opstring)
+        options, args = cli_detect.detectParseOptions(opstring)
         try:
-            cli_detect.detect(options,args)
-            subtests['Completed API Call'] = {'result':True}
+            cli_detect.detect(options, args)
+            subtests['Completed API Call'] = {'result': True}
         except Exception as e:
-            subtests['Completed API Call'] = {'result':False, 'reason':e}
+            subtests['Completed API Call'] = {'result': False, 'reason': e}
 
-        subtests['Output Directory Exists'] = {'result':os.path.exists(output_path),'reason':""}
-        subtests['Output Detection File Exists'] = {'result':os.path.exists(self.detection_file_path),'reason':""}
-        subtests['Output Detection File Size < 512KB'] = {'result':os.path.getsize(self.detection_file_path) < 512*1024,'reason':"Detection file size is " + str(os.path.getsize(self.detection_file_path)/1024) + " KB"}
+        subtests['Output Directory Exists'] = {'result': os.path.exists(output_path), 'reason': ""}
+        subtests['Output Detection File Exists'] = {'result': os.path.exists(self.detection_file_path), 'reason': ""}
+        subtests['Output Detection File Size < 512KB'] = {
+            'result': os.path.getsize(self.detection_file_path) < 512 * 1024,
+            'reason': "Detection file size is " + str(os.path.getsize(self.detection_file_path) / 1024) + " KB"}
         return subtests
 
-    def test_2_detection_image_output(self,testim_path=None,output_path=None,return_media=False):
+    def test_2_detection_image_output(self, testim_path=None, output_path=None, return_media=False):
         if testim_path is None:
             testim_path = self.testim_path
         if output_path is None:
             output_path = self.output_path
-        testimage = cv2.imread(os.path.join(self.testdata_folder,testim_path))
+        testimage = cv2.imread(os.path.join(self.testdata_folder, testim_path))
         subtests = {}
         detection_obj = None
         try:
@@ -139,10 +169,12 @@ class DetectTest(BriarTest):
             subtests['Loaded Detection file'] = {'result': False, 'reason': e}
             return subtests
         if detection_obj is not None:
-            subtests.update(detection_output_tests(detection_obj_loaded,testimage,return_media,))
+            subtests.update(detection_output_tests(detection_obj_loaded, testimage, return_media, ))
         return subtests
+
     def test_3_detection_image_withreturn(self):
         return self.test_1_detection_image(return_media=True)
+
     def test_4_detection_image_output_withreturn(self):
         return self.test_2_detection_image_output(return_media=True)
     # Test detection on corrupt video
@@ -155,7 +187,8 @@ class DetectTest(BriarTest):
     # Test detection on each modality
     # Check each modality for correct return modality flag
 
-def detection_output_tests(detection_obj_loaded,testimage,return_media):
+
+def detection_output_tests(detection_obj_loaded, testimage, return_media):
     try:
         detection_obj = detection_obj_loaded.detections
     except:
@@ -215,9 +248,10 @@ def detection_output_tests(detection_obj_loaded,testimage,return_media):
         subtests['Detection media source path exists'] = {
             'result': os.path.exists(detection_obj[0].media.source),
             'reason': "source path: " + detection_obj[0].media.source}
-        subtests['Total duration is > 0'] = {'result': timing.timeElapsed(detection_obj_loaded.durations.total_duration) > 0,
-                                             'reason': 'Total duration is ' + str(
-                                                 timing.timeElapsed(detection_obj_loaded.durations.total_duration)) + " seconds"}
+        subtests['Total duration is > 0'] = {
+            'result': timing.timeElapsed(detection_obj_loaded.durations.total_duration) > 0,
+            'reason': 'Total duration is ' + str(
+                timing.timeElapsed(detection_obj_loaded.durations.total_duration)) + " seconds"}
 
         totaldur = []
         for dkey in detection_obj_loaded.durations.durations:
@@ -252,21 +286,27 @@ def detection_output_tests(detection_obj_loaded,testimage,return_media):
             'reason': 'Difference between duration parts and total duration is ' + str(durdif) + " seconds"}
     return subtests
 
-def extraction_output_tests(template_obj_loaded,testimage,return_media):
+
+def extraction_output_tests(template_obj_loaded, testimage, return_media):
     subtests = {}
     templatesize = sys.getsizeof(template_obj_loaded[0])
     if templatesize > 0:
         subtests['Template > 0 memory size'] = {'result': True}
     else:
-        subtests['Template > 0 memory size'] = {'result': False, 'reason': "sys.getsizeof(template) = " + str(templatesize)}
+        subtests['Template > 0 memory size'] = {'result': False,
+                                                'reason': "sys.getsizeof(template) = " + str(templatesize)}
 
     return subtests
+
+
 class ExtractTest(BriarTest):
     testim_path = "testdata/BTS1/distractors/G00038/controlled/images_jpg/face/G00038_set2_face0_03_45_662fb70a.jpg"
     output_path = "./briar-integration-test-results"
+
     def description(self):
         return 'Unit tests for Template Extraction Functions'
-    def test_1_extraction_image(self,testim_path=None,output_path=None,return_media=False):
+
+    def test_1_extraction_image(self, testim_path=None, output_path=None, return_media=False):
         subtests = {}
         import briar.cli.extract as cli_extract
         import briar.cli.detect as cli_detect
@@ -279,20 +319,23 @@ class ExtractTest(BriarTest):
             0] + cli_extract.TEMPLATE_FILE_EXT)
         self.detection_file_path = os.path.join(output_path, os.path.basename(testim_path).split('.')[
             0] + cli_detect.DETECTION_FILE_EXT)
-        opstring = "extract -o " + output_path +" "+ os.path.join(self.testdata_folder,testim_path)
+        opstring = "extract -o " + output_path + " " + os.path.join(self.testdata_folder, testim_path)
         if return_media:
-            opstring = "extract -o " + output_path + " --return-media " + os.path.join(self.testdata_folder, testim_path)
-        options,args = cli_extract.extractParseOptions(opstring)
+            opstring = "extract -o " + output_path + " --return-media " + os.path.join(self.testdata_folder,
+                                                                                       testim_path)
+        options, args = cli_extract.extractParseOptions(opstring)
         try:
-            cli_extract.extract(options,args)
-            subtests['Completed API Call'] = {'result':True}
+            cli_extract.extract(options, args)
+            subtests['Completed API Call'] = {'result': True}
         except Exception as e:
-            subtests['Completed API Call'] = {'result':False, 'reason':e}
+            subtests['Completed API Call'] = {'result': False, 'reason': e}
             return subtests
 
-        subtests['Output Directory Exists'] = {'result':os.path.exists(output_path),'reason':""}
-        subtests['Output Detection File Exists'] = {'result':os.path.exists(self.template_file_path),'reason':""}
-        subtests['Output Detection File Size < 512KB'] = {'result':os.path.getsize(self.template_file_path) < 512*1024,'reason':"Detection file size is " + str(os.path.getsize(self.template_file_path)/1024) + " KB"}
+        subtests['Output Directory Exists'] = {'result': os.path.exists(output_path), 'reason': ""}
+        subtests['Output Detection File Exists'] = {'result': os.path.exists(self.template_file_path), 'reason': ""}
+        subtests['Output Detection File Size < 512KB'] = {
+            'result': os.path.getsize(self.template_file_path) < 512 * 1024,
+            'reason': "Detection file size is " + str(os.path.getsize(self.template_file_path) / 1024) + " KB"}
 
         return subtests
 
@@ -342,6 +385,7 @@ class ExtractTest(BriarTest):
     # Test extraction on each modality
     # Check eac modality for correct return modality flag
 
+
 class EnrollTest(BriarTest):
     def test(self):
         pass
@@ -355,6 +399,7 @@ class EnrollTest(BriarTest):
     # Test extraction output for correct data
     # Test extraction on each modality
     # Check eac modality for correct return modality flag
+
 
 class DatabaseTest(BriarTest):
     def test(self):

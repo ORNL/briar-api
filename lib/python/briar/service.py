@@ -34,39 +34,33 @@ iterator in a loop.
 In case both are streaming, then both will yield, and both will iterate in a ping-pong fashion, yielding back and
 forth to each-other.
 """
-from concurrent import futures
-import logging
-import multiprocessing as mp
-import os
-import random
-
-import grpc
-import uuid
-import time
-
-from briar import DEFAULT_SERVE_PORT
 import briar.briar_grpc.briar_pb2
 import briar.briar_grpc.briar_pb2_grpc
 import briar.briar_grpc.briar_service_pb2 as srvc_pb2
 import briar.briar_grpc.briar_service_pb2_grpc as srvc_pb2_grpc
-from briar.media_converters import *
-from briar.functions import new_uuid
-
+import grpc
+import logging
+import multiprocessing as mp
+import os
+import random
+import time
 import traceback
-
+import uuid
+from briar import DEFAULT_SERVE_PORT
+from briar.media_converters import *
+from concurrent import futures
 
 
 class BRIARService(srvc_pb2_grpc.BRIARServiceServicer):
-    """!
-    This service, when run, starts a server which awaits connections and messages from briar clients, running
-    methods defined in briar_service.proto in "BRIARService". 
-    
-    The methods which are invoked by incoming grpc messages are not implemented and are present to act as a
-    framework to assist performers developing their own services.
     """
-    DEFAULT_WEIGHTS_DIR = "weights"
-    DEFAULT_PREDICTOR_NAME = "predictor_model.dat"
-    DEFAULT_REC_MODEL_NAME = "recognition_model.dat"
+
+    """
+    process_number = None
+    server_count = None
+    service_per_port_count = None
+    thread_per_service_count = None
+    port_list = None
+    base_port = briar.DEFAULT_SERVE_PORT
 
     def __init__(self, options=None, database_path="databases"):
         """!
@@ -76,21 +70,11 @@ class BRIARService(srvc_pb2_grpc.BRIARServiceServicer):
         """
         super(BRIARService, self).__init__()
 
-        if not 'BRIAR_DIR' in os.environ:
-            raise EnvironmentError("The default Briar directory is not specified in your "
-                                   "system's environment variables.")
-
-        self.predictor_path = os.path.join(os.environ['BRIAR_DIR'],
-                                           self.DEFAULT_WEIGHTS_DIR,
-                                           self.DEFAULT_PREDICTOR_NAME)
-        self.rec_model_path = os.path.join(os.environ['BRIAR_DIR'],
-                                           self.DEFAULT_WEIGHTS_DIR,
-                                           self.DEFAULT_REC_MODEL_NAME)
 
         self.options = options
 
     def get_api_version(self, request, context):
-        return briar_pb2.APIVersion(major=1,minor=2,patch=3)
+        return briar_pb2.APIVersion(major=1, minor=2, patch=3)
 
     def status(self, request, context):
         """!
@@ -101,11 +85,11 @@ class BRIARService(srvc_pb2_grpc.BRIARServiceServicer):
         @return: briar_service_pb2.StatusReply
         """
         return srvc_pb2.StatusReply(developer_name="[devname-here]",
-                                     service_name="This is a service",
-                                     version=briar_pb2.APIVersion(major=1,
-                                                                  minor=2,
-                                                                  patch=3),
-                                     status=briar_pb2.BriarServiceStatus.READY)
+                                    service_name="This is a service",
+                                    version=briar_pb2.APIVersion(major=1,
+                                                                 minor=2,
+                                                                 patch=3),
+                                    status=briar_pb2.BriarServiceStatus.READY)
 
     def detect(self, req_iter, context):
         """!
@@ -121,7 +105,7 @@ class BRIARService(srvc_pb2_grpc.BRIARServiceServicer):
         """
         raise NotImplementedError
 
-    def extract(self, req_iter, context):
+    def extract(self, req_iter , context):
         """!
         Streams image data in the form of a extract request iterator. Takes images,
         extracts faces, and creates templates using provided detections, auto detection,
@@ -155,7 +139,7 @@ class BRIARService(srvc_pb2_grpc.BRIARServiceServicer):
         print("Enrolling...")
         raise NotImplementedError
 
-    def verify(self, request, context):
+    def verify(self, request , context):
         """!
         @brief: Calculate how similar sets of templates are
 
@@ -168,7 +152,7 @@ class BRIARService(srvc_pb2_grpc.BRIARServiceServicer):
         print("Verifying template matches")
         raise NotImplementedError
 
-    def search(self, request, context):
+    def search(self, request , context):
         """!
         Search database for templates matching the provided probe
 
@@ -181,7 +165,7 @@ class BRIARService(srvc_pb2_grpc.BRIARServiceServicer):
         print("Searching Templates")
         raise NotImplementedError
 
-    def cluster(self, request, context):
+    def cluster(self, request : srvc_pb2.ClusterRequest, context):
         """!
         Takes a set of templates and clusters them, matching according to subject similarity
 
@@ -193,7 +177,7 @@ class BRIARService(srvc_pb2_grpc.BRIARServiceServicer):
         """
         raise NotImplementedError
 
-    def enhance(self, request, context):
+    def enhance(self, request , context):
         """!
         Run an enhancement on a provided image
 
@@ -205,7 +189,7 @@ class BRIARService(srvc_pb2_grpc.BRIARServiceServicer):
         """
         raise NotImplementedError
 
-    def database_create(self, request, context):
+    def database_create(self, request : srvc_pb2.DatabaseCreateRequest, context):
         """!
         Create a new database and populate it with templates
 
@@ -217,7 +201,12 @@ class BRIARService(srvc_pb2_grpc.BRIARServiceServicer):
         """
         raise NotImplementedError
 
-    def database_load(self, request, context):
+    def database_rename(self, request : srvc_pb2.DatabaseRenameRequest, context):
+        raise NotImplementedError
+
+    def database_refresh(self, request : srvc_pb2.Empty, context):
+        raise NotImplementedError
+    def database_load(self, request : srvc_pb2.DatabaseLoadRequest, context):
         """!
         Load the database specified in the load request
 
@@ -229,7 +218,7 @@ class BRIARService(srvc_pb2_grpc.BRIARServiceServicer):
         """
         raise NotImplementedError
 
-    def database_insert(self, request, context):
+    def database_insert(self, request : srvc_pb2.DatabaseInsertRequest, context):
         """!
         Inserts the templates contained in the request into a specified database
 
@@ -239,9 +228,10 @@ class BRIARService(srvc_pb2_grpc.BRIARServiceServicer):
 
         @return: briar_service_pb2.DatabaseInsertReply
         """
+
         raise NotImplementedError
 
-    def database_retrieve(self, request, context):
+    def database_retrieve(self, request : srvc_pb2.DatabaseRetrieveRequest, context):
         """!
         Retrieves the templates contained in the database matching the provided names
 
@@ -299,25 +289,29 @@ class BRIARService(srvc_pb2_grpc.BRIARServiceServicer):
         @return: briar_service_pb2.DatabaseFinalizeReply
         """
         raise NotImplementedError
+    def database_checkpoint_subject(self, request, context):
+        """
+    The database_checkpoint_subject function is used to checkpoint a subject in the database.
 
-def serve():
-    """!
-    Initialize and run the BRIARService. Runs until killed
-
-    @return:
+    :param self: Represent the instance of the class
+    :param request: Get the subject_id from the client
+    :param context: Pass information about the grpc call
+    :return: A checkpointsubjectresponse
+    :doc-author: Joel Brogan
     """
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10),
-                         options=[('grpc.max_send_message_length', 20000000),
-                                  ('grpc.max_receive_message_length', 20000000)])
-    srvc_pb2_grpc.add_BRIARServiceServicer_to_server(BRIARService(), server)
-    server.add_insecure_port(DEFAULT_SERVE_PORT)
-    server.start()
-    # server.wait_for_termination()
+        raise NotImplementedError
 
-    print("Service Started.  ")
-    while True:
-        time.sleep(0.1)
+    def get_service_configuration(self, request, context):
+        reply = srvc_pb2.BriarServiceConfigurationReply()
+        reply.number_of_service_ports = self.server_count
+        reply.number_of_processes_per_port = self.service_per_port_count
+        reply.number_of_threads_per_process = self.thread_per_service_count
+        reply.reporting_process_number = self.process_number
+        reply.base_port = self.base_port
+        reply.port_list.MergeFrom(self.port_list)
+        return reply
+
 
 if __name__ == '__main__':
     logging.basicConfig()
-    serve()
+    briar.serve()

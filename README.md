@@ -1,12 +1,12 @@
 # BRIAR API
 ## Authors
 
-| Name | Organization |
-| ------ | ------ |
+| Name        | Organization                  |
+| ----------- | ----------------------------- |
 | David Bolme | Oak Ridge National Laboratory |
 | Joel Brogan | Oak Ridge National Laboratory |
 | Ian Shelley | Oak Ridge National Laboratory |
-| Bob Zhang | Oak Ridge National Laboratory |
+| Bob Zhang   | Oak Ridge National Laboratory |
 
 ## Table of Contents
  <!-- * README (Manual)
@@ -18,23 +18,7 @@
    * [Language Support](#language-support)
    * [Installation](#installation)
    * [Developing a BRIAR Service](#developing-a-briar-service-that-communicates-with-the-api)
-
-
-
-   * Overview
-   * Important Information
-   * Version Requirements
-     * Phase 1
-     * Phase 2
-     * Phase 3
-   * Building stubs
-   * Submitting Containers
-     * docker
-     * singularity
-   * Evaluation protocol
-     * Running Containers
-     * Calling Enrollment
-     * Calling verification and search -->
+ -->
 
 [[_TOC_]]
 
@@ -61,6 +45,19 @@ This Repository contains 3 main components:
       * lib/python/briar_client.py -> a fully functional Python API that allows for calling functions in BRIAR performer algorithms
       * lib/python/cli/* -> function call implementations using the API that provide interaction via the command line
   * proto/briar/briar_grpc -> protobuf files that define the messages and services that comprise the BRIAR API
+
+## Run tests against your Implementation!
+simply run:
+
+`python -m briar.tests.integration_test`
+
+`python -m briar.tests.validation_test`
+
+or, to generate BEAUTIFUL HTML reports of the test outputs:
+
+`python -m briar.tests.integration_test_report > integration_test.html`
+
+`python -m briar.tests.validation_test_report > validation_test.html`
 
 ## Change Log
 
@@ -97,6 +94,18 @@ While a mostly bare python example service is given, it is expected that perform
 
 ## Installation
 
+### The fast version...
+
+```bash
+conda create -n briar python=3.12 anaconda conda-forge::doxygen
+conda activate briar
+python -m pip install -U -e .
+./build-proto-stubs.sh
+./build-proto-docs.sh
+```
+
+### The longer version...
+
 These instructions will set up the API and command line and will establish a python development environment for using the API. If you are using another language, additional steps may be required to add the pre-generated gRPC stubs (found in lib/[language_name]) to incorporate them into your development environment
 
 
@@ -114,7 +123,7 @@ If you do not wish to create an anaconda environment, start here:
 5. Build the protobuf stubs: `./build-proto-stubs.sh`
    1. May need to make the script executable : `chmod +x ./build-proto-stubs.sh`
 6. Set the environment variables for BRIAR: `./briar_env.sh`
-7. Install the python files: ` python setup.py install`
+7. Install the python files: ` pip install -e .`
 
 
 
@@ -178,8 +187,8 @@ Run `python -m briar status` to check that you can establish a connection to the
 ===================== STATUS =====================
   Developer:   Oak Ridge National Laboratory
   Name:        Briar.Exmaple
-  Alg Version: 0.1.0
-  API Version: 0.0.0
+  Alg Version: 2.0.0
+  API Version: 2.1.7
   Status:      READY
 ==================================================
 ~~~

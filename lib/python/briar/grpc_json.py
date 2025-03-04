@@ -4,13 +4,10 @@ generalized json converter for said objects. Good for writing the objects themse
 write any vectors/matrixes/images stored within the objects to disk so it may be a good idea to remove said
 data before converting to json if you care about performance in your implementations.
 """
-import pdb
-from collections import defaultdict
 import json
-
+import pdb
 from briar.briar_grpc import briar_pb2, briar_service_pb2, briar_error_pb2
-
-
+from collections import defaultdict
 
 # Protobuf generated gRPC objects contain lots of fields which don't need to be saved - this is a blacklist
 # of the fields to ignore
@@ -20,13 +17,13 @@ ATTRIB_IGNORE = ['ByteSize', 'Clear', 'ClearExtension', 'ClearField', 'CopyFrom'
                  'HasField', 'IsInitialized', 'ListFields', 'MergeFrom',
                  'MergeFromString', 'ParseFromString', 'RegisterExtension',
                  'SerializePartialToString', 'SerializeToString',
-                 'SetInParent','UnknownFields', 'WhichOneof',
+                 'SetInParent', 'UnknownFields', 'WhichOneof',
                  '_CheckCalledFromGeneratedFile', '_SetListener',
                  '__deepcopy__', '__delattr__', '__dir__', '__doc_',
                  '_extensions_by_name', '_extensions_by_number', 'EnumTypeWrapper']
 
 
-def save(json_obj, save_path,options=None):
+def save(json_obj, save_path, options=None):
     """!
     Save a list or dictionary containing protobuf classes to a json file
 
@@ -39,12 +36,14 @@ def save(json_obj, save_path,options=None):
         fp.write(json.dumps(json_obj, default=GrpcEncoder(options).default,
                             sort_keys=True, indent=4))
 
+
 class GrpcEncoder(json.JSONEncoder):
     """!
     Encoder class which extends the normal JSON encoder to allow the encoding of gRPC objects. Inherits from
     json.JSONEncoder
     """
-    def __init__(self,options=None):
+
+    def __init__(self, options=None):
         self.options = options
 
     def default(self, obj):
@@ -58,22 +57,22 @@ class GrpcEncoder(json.JSONEncoder):
         if isinstance(obj, bytes):
             try:
                 o2 = obj.decode("ISO-8859-1")
-                o = {"__class__":"bytes", "__contents__":o2}
+                o = {"__class__": "bytes", "__contents__": o2}
                 return o
             except Exception as e:
-                print('got an exception',e)
-                return {"__class__":"bytes", "__contents__":bytes()}
+                print('got an exception', e)
+                return {"__class__": "bytes", "__contents__": bytes()}
                 # print("Exception", e)
                 # print("\tObject", obj)
 
         # convert Briar protobuf grpc objects to a dictionary
         if getattr(obj, '__module__', None) in (briar_pb2.__name__, briar_service_pb2.__name__,
                                                 briar_error_pb2.__name__):
-            return proto_obj_to_dict(obj,self.options)
+            return proto_obj_to_dict(obj, self.options)
 
         if "Repeated" in str(type(obj)) and "Container" in str(type(obj)):
             return {"__class__": str(type(obj)).split("'")[1],
-                    "__contents__":[i for i in obj]}
+                    "__contents__": [i for i in obj]}
 
         if "MapContainer" in str(type(obj)):
             return {"__class__": str(type(obj)).split("'")[1],
@@ -85,7 +84,7 @@ class GrpcEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
-def proto_obj_to_dict(obj,options=None):
+def proto_obj_to_dict(obj, options=None):
     """!
     Takes a general gRPC/protobuf object, eliminates the unnecessary fields, and stores the data in a dict.
 
@@ -118,7 +117,7 @@ def proto_obj_to_dict(obj,options=None):
     return d
 
 
-def load(load_path,options=None):
+def load(load_path, options=None):
     """!
     Load the json file at the given directory, reloading dictionaries with "__class__" fields into the specified
     objects and initializing them with values defined by key/value pairs within the dictionary
@@ -136,8 +135,10 @@ class GrpcDecoder(json.JSONDecoder):
     Object which extends the JSONDecoded to allow it to read saved gRPC files. Applied as a hook
     in the json load function. Inherits from json.JSONDecoder
     """
-    def __init__(self,options):
+
+    def __init__(self, options):
         self.options = options
+
     def default(self, obj):
         """!
         Takes the given object and convert it into a gRPC object if its a dictionary
@@ -166,7 +167,7 @@ class GrpcDecoder(json.JSONDecoder):
                     for list_item in obj['__contents__']:
                         l.append(self.default(list_item))
                     # return l
-                else: # "MapContainer" in cls
+                else:  # "MapContainer" in cls
                     d = dict()
                     for k, v in obj['__contents__'].items():
                         d[k] = self.default(v)
@@ -175,12 +176,12 @@ class GrpcDecoder(json.JSONDecoder):
 
             # convert protobuf/grpc objects
             elif module_name in (briar_pb2.__name__, briar_service_pb2.__name__):
-                return dict_to_proto_obj(obj,self.options)
+                return dict_to_proto_obj(obj, self.options)
 
         return obj
 
 
-def dict_to_proto_obj(obj_dict,options=None):
+def dict_to_proto_obj(obj_dict, options=None):
     """!
     Take the object dictionary, read the dict which is saved in in the '__class__' key, and initialize it with
     values stored in the dictionary's key/value pairs
@@ -207,19 +208,19 @@ def dict_to_proto_obj(obj_dict,options=None):
         except AttributeError:
             # some protobuf objects don't like direct assignment
             # try:
-                cls_attrib = getattr(cls_instance, attrib)
-                if "MergeFrom" in dir(cls_attrib):
-                    try:
-                        cls_attrib.MergeFrom(value)
-                    except:
-                        for k in value:
-                            if hasattr(cls_attrib,'get_or_create'):
-                                o = cls_attrib.get_or_create(k)
-                                o.CopyFrom(value[k])
-                elif "CopyFrom" in dir(cls_attrib):
-                    cls_attrib.CopyFrom(value)
-            # except Exception as e:
-            #     if True:# options is not None and options.verbose:
-            #         print('Warning: Could not write attribute ', attrib) #TODO: Fix durations and errors to correctly load through
-            #         print(e)
+            cls_attrib = getattr(cls_instance, attrib)
+            if "MergeFrom" in dir(cls_attrib):
+                try:
+                    cls_attrib.MergeFrom(value)
+                except:
+                    for k in value:
+                        if hasattr(cls_attrib, 'get_or_create'):
+                            o = cls_attrib.get_or_create(k)
+                            o.CopyFrom(value[k])
+            elif "CopyFrom" in dir(cls_attrib):
+                cls_attrib.CopyFrom(value)
+        # except Exception as e:
+        #     if True:# options is not None and options.verbose:
+        #         print('Warning: Could not write attribute ', attrib) #TODO: Fix durations and errors to correctly load through
+        #         print(e)
     return cls_instance
