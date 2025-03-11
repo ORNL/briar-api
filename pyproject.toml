@@ -1,0 +1,38 @@
+# url: https://github.com/ORNL/briar-api
+
+# packages needed
+# opencv_python
+# pyvision-toolkit
+
+# python package dir: lib/python
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "briar-api"
+version = "2.3.8"
+description = "A Python API for the Briar project"
+authors = [
+    { name = "Author Name", email = "author@example.com" }
+]
+license = { text = "MIT" }
+dependencies = [
+    "opencv-python",
+    "pyvision-toolkit",
+    "grpcio",
+    "grpcio-tools",
+    "mypy-protobuf",
+    "tqdm",
+    "matplotlib",
+    "pandas",
+    "colorama",
+    "protobuf==5.29.3",
+    "imageio-ffmpeg",
+    "imageio",
+    "dlib",
+    "imutils",
+]
+
+[tool.setuptools.packages.find]
+where = ["lib/python"]
