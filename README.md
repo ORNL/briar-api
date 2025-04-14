@@ -4,8 +4,9 @@
 | Name        | Organization                  |
 | ----------- | ----------------------------- |
 | David Bolme | Oak Ridge National Laboratory |
-| Ryan Shivers | Oak Ridge National Laboratory |
 | Joel Brogan | Oak Ridge National Laboratory |
+| Ian Shelley | Oak Ridge National Laboratory |
+| Bob Zhang   | Oak Ridge National Laboratory |
 
 ## Table of Contents
  <!-- * README (Manual)

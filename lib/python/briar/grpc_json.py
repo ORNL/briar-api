@@ -8,7 +8,7 @@ import json
 import pdb
 from briar.briar_grpc import briar_pb2, briar_service_pb2, briar_error_pb2
 from collections import defaultdict
-
+from google.protobuf.json_format import MessageToJson
 # Protobuf generated gRPC objects contain lots of fields which don't need to be saved - this is a blacklist
 # of the fields to ignore
 ATTRIB_IGNORE = ['ByteSize', 'Clear', 'ClearExtension', 'ClearField', 'CopyFrom',
@@ -22,19 +22,22 @@ ATTRIB_IGNORE = ['ByteSize', 'Clear', 'ClearExtension', 'ClearField', 'CopyFrom'
                  '__deepcopy__', '__delattr__', '__dir__', '__doc_',
                  '_extensions_by_name', '_extensions_by_number', 'EnumTypeWrapper']
 
-
-def save(json_obj, save_path, options=None):
-    """!
-    Save a list or dictionary containing protobuf classes to a json file
-
-    @param json_obj list||dict: List or dict containing data to save
-    @param save_path str: Path to the file to save
-
-    Returns: None
-    """
+def save(obj, save_path, options=None):
+    m = MessageToJson(obj)
     with open(save_path, 'w') as fp:
-        fp.write(json.dumps(json_obj, default=GrpcEncoder(options).default,
-                            sort_keys=True, indent=4))
+        fp.write(m)
+# def save(json_obj, save_path, options=None):
+#     """!
+#     Save a list or dictionary containing protobuf classes to a json file
+
+#     @param json_obj list||dict: List or dict containing data to save
+#     @param save_path str: Path to the file to save
+
+#     Returns: None
+#     """
+#     with open(save_path, 'w') as fp:
+#         fp.write(json.dumps(json_obj, default=GrpcEncoder(options).default,
+#                             sort_keys=True, indent=4))
 
 
 class GrpcEncoder(json.JSONEncoder):

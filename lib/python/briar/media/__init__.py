@@ -7,134 +7,126 @@ import multiprocessing as mp
 import numpy as np
 import os
 import time
+import re
 from briar import briar_media
 from briar import media_converters
 from briar.media_converters import image_cv2proto, pathmap_path2remotepath
-from briar.media.VideoStream import FileVideoStream_cv2,FileVideoStream_imageio
+from briar.media.VideoStream import FileVideoStream_cv2, FileVideoStream_imageio
+import numpy as np
+import time
+import math
 
-# OpenCV Capture Properties
-# CAP_PROP_FPS
-# CAP_PROP_FRAME_COUNT
-# CAP_PROP_FRAME_HEIGHT
-# CAP_PROP_FRAME_WIDTH
-# CAP_PROP_IMAGES_BASE
-# CAP_PROP_IMAGES_LAST
-# CAP_PROP_POS_AVI_RATIO
-# CAP_PROP_POS_FRAMES
-# CAP_PROP_POS_MSEC
-# CAP_PROP_FPS
-# CAP_PROP_FORMAT
-# CAP_PROP_MODE
+DEFAULT_STREAMING_FRAME_CHOP = 480  # about 20 seconds @ 24 fps
 
-class BriarVideoIterator():
-
-    def __init__(self, filepath, start=None, stop=None, unit=None, debug_empty=False,options=None):
-
-        """
-    The __init__ function is called when the class is instantiated.
-    It sets up the instance of the class, and defines all its attributes.
-    The __init__ function takes in arguments that are passed to it by whoever creates an instance of this class,
-    and assigns these arguments to self variables so they can be used throughout this object.
-
-    :param self: Represent the instance of the class
-    :param filepath: Specify the path to the video file
-    :param start: Specify the start frame of the video
-    :param stop: Set the last frame to be read from the video
-    :param unit: Specify the unit of start and stop, choices: frame, time in seconds, NA (defaults to full video)
-    :param debug_empty: specified for creating a debug video iterator object that passes empty frames for testing purposes
-    :return: Nothing
-    :doc-author: Joel Brogan, BRIAR team, Trelent
+def is_streaming_url(media_file):
     """
+    Check if the given media_file string is a streaming URL.
+
+    Args:
+        media_file (str): The media file string to check.
+
+    Returns:
+        bool: True if it's a streaming URL, False otherwise.
+    """
+    streaming_url_pattern = re.compile(r'^(http|https|rtsp|rtmp)://')
+    return bool(streaming_url_pattern.match(media_file))
+
+class BriarVideoIterator:
+    def __init__(self, filepath, start=None, stop=None, unit=None, debug_empty=False, options=None):
+        """
+        Initialize the video iterator.
+
+        Args:
+            filepath (str): Path to the video file.
+            start (int, optional): Start frame of the video.
+            stop (int, optional): Stop frame of the video.
+            unit (str, optional): Unit of start and stop, choices: frame, second, NA.
+            debug_empty (bool, optional): Create a debug video iterator object that passes empty frames for testing purposes.
+            options (dict, optional): Additional options for the video iterator.
+        """
         pass
 
     def __len__(self):
         """
-    The __len__ function is used to determine the length of an object.
-    For example, if you have a list with 5 items in it, calling len(my_list) will return 5.
-    The __len__ function is called when using the built-in len() function.
+        Determine the length of the iterator.
 
-    :param self: Allow an object to refer to itself
-    :return: The length of the iterator
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Returns:
+            int: The length of the iterator.
+        """
         pass
 
     def __iter__(self):
-        # Scan to the start frame
         """
-    The __iter__ function is called when an iterator is required for a container.
-    This function should return a new iterator object that can iterate over all the objects in the container.
-    For mappings, it should iterate over the keys of the container, and should also be made available as the method __iter__().
+        Create an iterator object.
 
-    :param self: Represent the instance of the class
-    :return: Self
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Returns:
+            BriarVideoIterator: The iterator object.
+        """
         pass
 
     def __aiter__(self):
         """
-    The __aiter__ function is used to define an asynchronous iterator.
+        Define an asynchronous iterator.
 
-    :param self: Refer to the current instance of a class
-    :return: The __iter__ function
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Returns:
+            BriarVideoIterator: The iterator object.
+        """
         pass
 
     def __next__(self):
-        # Read until video is completed
         """
-    The __next__ function is called by the for loop to get each item from the iterator.
-    The __next__ function should raise a StopIteration exception when there are no more items in the container.
+        Get the next item from the iterator.
 
-
-    :param self: Represent the instance of the class
-    :return: A frame from the video
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
-
+        Returns:
+            numpy.ndarray: A frame from the video.
+        """
         pass
 
     async def __anext__(self):
-        # Read until video is completed
         """
-    The __anext__ function is the asynchronous iterator protocol.
-    It allows you to use async for loops, which are a lot more efficient than regular for loops.
-    The __anext__ function should return an awaitable object that resolves to the next item in your sequence.
+        Get the next item from the asynchronous iterator.
 
-    :param self: Represent the instance of the class
-    :return: A frame, which is a numpy array
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Returns:
+            numpy.ndarray: A frame from the video.
+        """
         pass
 
+    def is_opened():
+        return False
+
+
 class VideoIterator(BriarVideoIterator):
-
-    def __init__(self, filepath, start=None, stop=None, unit=None, debug_empty=False,options=None):
-
+    def __init__(self, filepath, start=None, stop=None, unit=None, debug_empty=False, options=None,cap=None):
         """
-    The __init__ function is called when the class is instantiated.
-    It sets up the instance of the class, and defines all its attributes.
-    The __init__ function takes in arguments that are passed to it by whoever creates an instance of this class,
-    and assigns these arguments to self variables so they can be used throughout this object.
+        Initialize the video iterator.
 
-    :param self: Represent the instance of the class
-    :param filepath: Specify the path to the video file
-    :param start: Specify the start frame of the video
-    :param stop: Set the last frame to be read from the video
-    :param unit: Specify the unit of start and stop, choices: frame, time in seconds, NA (defaults to full video)
-    :param debug_empty: specified for creating a debug video iterator object that passes empty frames for testing purposes
-    :return: Nothing
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Args:
+            filepath (str): Path to the video file.
+            start (int, optional): Start frame of the video.
+            stop (int, optional): Stop frame of the video.
+            unit (str, optional): Unit of start and stop, choices: frame, second, NA.
+            debug_empty (bool, optional): Create a debug video iterator object that passes empty frames for testing purposes.
+            options (dict, optional): Additional options for the video iterator.
+        """
         self.debug_empty = debug_empty  #
-        self.filepath = filepath
-        self.isOpened = False
         self.cap = None
-        if not self.debug_empty:
+        self.filepath = filepath
+        self.is_stream = is_streaming_url(filepath)
+        self.cap_reused = False
+        if cap is not None:
+            if options.verbose:
+                print('Using cv2.VideoCapture object as input')
+            self.cap = cap
+            self.is_stream = True
+            self.cap_reused = True
+        self.isOpened = False
+        self.options = options
+        self.skip_length = options.skip_frames
+        self.maintainCapture = False
+        if not self.debug_empty and self.cap is None:
             self.cap = cv2.VideoCapture(self.filepath)
         # Check if camera opened successfully
+        self.isOpened = self.is_opened()
         if not self.debug_empty and self.cap.isOpened() == False:
 
             print('Could not read file: ', self.filepath)
@@ -149,16 +141,7 @@ class VideoIterator(BriarVideoIterator):
                 self.frame_count = int(stop) + 1
                 self.fps = 30
             else:
-                self.frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                self.frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                self.frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                self.fps = float(self.cap.get(cv2.CAP_PROP_FPS))
-                if self.fps is not None and self.fps > 0:
-                    self.length = self.frame_count / self.fps
-                else:
-                    self.length = self.frame_count
-                self.pos =  0#int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
-                self.msec =  0#int(self.cap.get(cv2.CAP_PROP_POS_MSEC))
+                self.get_capture_attributes()
 
             # Figure out the range of frames [start_frame, end_frame)
             if unit == 'NA' or unit is None:
@@ -191,19 +174,45 @@ class VideoIterator(BriarVideoIterator):
                 self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.start_frame)
             self.processed = 0
             self.isOpened = True
+            if self.skip_length > 0:    
+                self.frame_count = self.length = int(math.floor(self.frame_count / (self.skip_length+1)))
+                self.fps = int(self.fps / (self.skip_length+1))
+    def get_capture_attributes(self):
+        self.frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        if not self.is_stream:
+            self.frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        else:
+            if self.options.chop_frames > 0:
+                self.frame_count = self.options.chop_frames
+            else:
+                self.frame_count = DEFAULT_STREAMING_FRAME_CHOP
+        self.fps = float(self.cap.get(cv2.CAP_PROP_FPS))
+        if self.fps is not None and self.fps > 0:
+            self.length = self.frame_count / self.fps
+        else:
+            self.length = self.frame_count
+        self.pos =  0#int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+        self.msec =  0#int(self.cap.get(cv2.CAP_PROP_POS_MSEC))
+
+    def insert_opened_capture(self,cap):
+        self.cap = cap
+        self.isOpened = self.is_opened()
+        self.get_capture_attributes()
+
+    def is_opened(self):
+        return self.cap.isOpened()
 
     def __len__(self):
         """
-        Calculates the length of the iterator.
+        Determine the length of the iterator.
 
         Returns:
-            The length of the iterator.
-
-        Raises:
-            Exception: If there is an error in calculating the length.
+            int: The length of the iterator.
         """
         try:
             subset = self.stop_frame - self.start_frame
+            subset = int(math.floor(subset / (self.skip_length+1)))
             if subset > 0:
                 return subset
         except Exception as e:
@@ -213,56 +222,67 @@ class VideoIterator(BriarVideoIterator):
     def __iter__(self):
         # Scan to the start frame
         """
-    The __iter__ function is called when an iterator is required for a container.
-    This function should return a new iterator object that can iterate over all the objects in the container.
-    For mappings, it should iterate over the keys of the container, and should also be made available as the method __iter__().
+        The __iter__ function is called when an iterator is required for a container.
+        This function should return a new iterator object that can iterate over all the objects in the container.
+        For mappings, it should iterate over the keys of the container, and should also be made available as the method __iter__().
 
-    :param self: Represent the instance of the class
-    :return: Self
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        :param self: Represent the instance of the class
+        :return: Self
+        :doc-author: Joel Brogan, BRIAR team, Trelent
+        """        
+
         if not self.debug_empty:
-            self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.start_frame)
+            if not self.cap_reused:
+                self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                for i in range(0, self.start_frame):
+                    ret = self.cap.grab()
+                    if ret:
+                        pass
+                    else:
+                        break
+                pos_frame = self.cap.get(cv2.CAP_PROP_POS_FRAMES)
+                assert int(pos_frame) == self.start_frame, f"Video Iterator start could not be set to {self.start_frame}"
         self.i = self.start_frame
         self.processed = 0
         return self
 
     def __aiter__(self):
         """
-    The __aiter__ function is used to define an asynchronous iterator.
+        Define an asynchronous iterator.
 
-    :param self: Refer to the current instance of a class
-    :return: The __iter__ function
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Returns:
+            VideoIterator: The iterator object.
+        """
         return self.__iter__()
 
     def __next__(self):
-        # Read until video is completed
         """
-    The __next__ function is called by the for loop to get each item from the iterator.
-    The __next__ function should raise a StopIteration exception when there are no more items in the container.
+        Get the next item from the iterator.
 
-
-    :param self: Represent the instance of the class
-    :return: A frame from the video
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
-
+        Returns:
+            numpy.ndarray: A frame from the video.
+        """
         if  not self.debug_empty and not self.cap.isOpened() :
             # End of file
-            print('end of file')
             raise StopIteration
-
+        # print('getting next frame',self.i,self.stop_frame)
         if self.i >= self.stop_frame:
             raise StopIteration
 
             # Capture frame-by-frame
         if not self.debug_empty:
+            for s in range(self.skip_length):
+                ret = self.cap.grab()
+                if ret is False:
+                    print('bad grab!')
+                    raise StopIteration
+                self.i += 1
             ret, frame = self.cap.read()  # reads in in BGR format. If BGR is set to true, these channels should not get flipped down-stream before being sent to the server.
             if frame is None or ret is False:
-                if self.i < len(self):
+                if self.i < self.start_frame + len(self):
                     print('Warning: iterator only made it through', self.i, 'frames of', len(self))
+                if self.options is not None and self.options.verbose:
+                    print('end of file3',ret, type(frame))
                 raise StopIteration
         else:
             # if we are sending debug dummy video (for throughput testing), send over just gaussian noise
@@ -277,16 +297,12 @@ class VideoIterator(BriarVideoIterator):
         return frame
 
     async def __anext__(self):
-        # Read until video is completed
         """
-    The __anext__ function is the asynchronous iterator protocol.
-    It allows you to use async for loops, which are a lot more efficient than regular for loops.
-    The __anext__ function should return an awaitable object that resolves to the next item in your sequence.
+        Get the next item from the asynchronous iterator.
 
-    :param self: Represent the instance of the class
-    :return: A frame, which is a numpy array
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Returns:
+            numpy.ndarray: A frame from the video.
+        """
         if not self.cap.isOpened():
             # End of file
             raise StopAsyncIteration
@@ -304,26 +320,19 @@ class VideoIterator(BriarVideoIterator):
         # Return as bgr
         return frame
 
-
 class ThreadedVideoIterator(BriarVideoIterator):
-
-    def __init__(self, filepath, start=None, stop=None, unit=None, debug_empty=False,options=None):
-
+    def __init__(self, filepath, start=None, stop=None, unit=None, debug_empty=False, options=None):
         """
-    The __init__ function is called when the class is instantiated.
-    It sets up the instance of the class, and defines all its attributes.
-    The __init__ function takes in arguments that are passed to it by whoever creates an instance of this class,
-    and assigns these arguments to self variables so they can be used throughout this object.
+        Initialize the threaded video iterator.
 
-    :param self: Represent the instance of the class
-    :param filepath: Specify the path to the video file
-    :param start: Specify the start frame of the video
-    :param stop: Set the last frame to be read from the video
-    :param unit: Specify the unit of start and stop, choices: frame, time in seconds, NA (defaults to full video)
-    :param debug_empty: specified for creating a debug video iterator object that passes empty frames for testing purposes
-    :return: Nothing
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Args:
+            filepath (str): Path to the video file.
+            start (int, optional): Start frame of the video.
+            stop (int, optional): Stop frame of the video.
+            unit (str, optional): Unit of start and stop, choices: frame, second, NA.
+            debug_empty (bool, optional): Create a debug video iterator object that passes empty frames for testing purposes.
+            options (dict, optional): Additional options for the video iterator.
+        """
         self.debug_empty = debug_empty  #
         self.filepath = filepath
         self.isOpened = False
@@ -389,14 +398,11 @@ class ThreadedVideoIterator(BriarVideoIterator):
 
     def __len__(self):
         """
-    The __len__ function is used to determine the length of an object.
-    For example, if you have a list with 5 items in it, calling len(my_list) will return 5.
-    The __len__ function is called when using the built-in len() function.
+        Determine the length of the iterator.
 
-    :param self: Allow an object to refer to itself
-    :return: The length of the iterator
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Returns:
+            int: The length of the iterator.
+        """
         try:
             subset = self.stop_frame - self.start_frame
             if subset > 0:
@@ -406,16 +412,12 @@ class ThreadedVideoIterator(BriarVideoIterator):
         return self.frame_count
 
     def __iter__(self):
-        # Scan to the start frame
         """
-    The __iter__ function is called when an iterator is required for a container.
-    This function should return a new iterator object that can iterate over all the objects in the container.
-    For mappings, it should iterate over the keys of the container, and should also be made available as the method __iter__().
+        Create an iterator object.
 
-    :param self: Represent the instance of the class
-    :return: Self
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Returns:
+            ThreadedVideoIterator: The iterator object.
+        """
         self.stream.scrub_to(self.start_frame)
         self.i = self.start_frame
         self.processed = 0
@@ -425,31 +427,31 @@ class ThreadedVideoIterator(BriarVideoIterator):
         return self
 
     def stop_iteration(self, exception_type):
+        """
+        Stop the iteration and raise the specified exception.
+
+        Args:
+            exception_type (Exception): The exception to raise.
+        """
         self.stream.stop()
         raise exception_type
 
     def __aiter__(self):
         """
-    The __aiter__ function is used to define an asynchronous iterator.
+        Define an asynchronous iterator.
 
-    :param self: Refer to the current instance of a class
-    :return: The __iter__ function
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Returns:
+            ThreadedVideoIterator: The iterator object.
+        """
         return self.__iter__()
 
     def __next__(self):
-        # Read until video is completed
         """
-    The __next__ function is called by the for loop to get each item from the iterator.
-    The __next__ function should raise a StopIteration exception when there are no more items in the container.
+        Get the next item from the iterator.
 
-
-    :param self: Represent the instance of the class
-    :return: A frame from the video
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
-
+        Returns:
+            numpy.ndarray: A frame from the video.
+        """
         if not self.debug_empty and not self.stream.more():
             # End of file
             # if self.options is not None and self.options.verbose:
@@ -477,16 +479,12 @@ class ThreadedVideoIterator(BriarVideoIterator):
         return frame
 
     async def __anext__(self):
-        # Read until video is completed
         """
-    The __anext__ function is the asynchronous iterator protocol.
-    It allows you to use async for loops, which are a lot more efficient than regular for loops.
-    The __anext__ function should return an awaitable object that resolves to the next item in your sequence.
+        Get the next item from the asynchronous iterator.
 
-    :param self: Represent the instance of the class
-    :return: A frame, which is a numpy array
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Returns:
+            numpy.ndarray: A frame from the video.
+        """
         if not self.stream.is_open():
             # End of file
             self.stop_iteration(StopAsyncIteration)
@@ -504,23 +502,19 @@ class ThreadedVideoIterator(BriarVideoIterator):
         # Return as bgr
         return frame
 
-
-class ImageIterator(object):
-
-    def __init__(self, filepath, start=None, stop=None, unit=None, debug_empty=False,options=None):
+class ImageIterator:
+    def __init__(self, filepath, start=None, stop=None, unit=None, debug_empty=False, options=None):
         """
-    The __init__ function is called when the class is instantiated.
-    It sets up the object with all of its initial values.
+        Initialize the image iterator.
 
-
-    :param self: Represent the instance of the class
-    :param filepath: Specify the path to the image file
-    :param start: Set the start frame of the video
-    :param stop: Specify the last frame to be read
-    :param unit: Specify the unit of time for the start and stop parameters
-    :return: The following:
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Args:
+            filepath (str): Path to the image file.
+            start (int, optional): Start frame of the video.
+            stop (int, optional): Stop frame of the video.
+            unit (str, optional): Unit of start and stop, choices: frame, second, NA.
+            debug_empty (bool, optional): Create a debug image iterator object that passes empty frames for testing purposes.
+            options (dict, optional): Additional options for the image iterator.
+        """
         self.filepath = filepath
         self.debug_empty = debug_empty
 
@@ -555,42 +549,31 @@ class ImageIterator(object):
 
     def __len__(self):
         """
-    The __len__ function is used to determine the length of an object.
-    For example, len(s) returns the number of items in s.
-    The built-in function len() calls s.__len__().
+        Determine the length of the iterator.
 
-
-    :param self: Refer to the instance of the class
-    :return: The length of the list
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Returns:
+            int: The length of the iterator.
+        """
         return 1
 
     def __iter__(self):
-        # Scan to the start frame
         """
-    The __iter__ function is called when an iterator object is created for the class.
-    This function should return a new iterator object that can iterate over all the objects in the class.
-    For example, list, tuple or string classes have this method defined that allows them to be iterated over with a for loop.
+        Create an iterator object.
 
-    :param self: Access the attributes and methods of the class
-    :return: The object itself
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Returns:
+            ImageIterator: The iterator object.
+        """
         self.i = self.start_frame
         self.processed = 0
         return self
 
     def __next__(self):
-        # Read until video is completed
         """
-    The __next__ function is called by the Python interpreter to fetch the next value from an iterator.
-    It should raise StopIteration when there are no more values to fetch.
+        Get the next item from the iterator.
 
-    :param self: Represent the instance of the class
-    :return: The next frame in the video
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Returns:
+            numpy.ndarray: A frame from the image.
+        """
         if self.i == self.stop_frame:
             raise StopIteration
 
@@ -602,24 +585,19 @@ class ImageIterator(object):
 
         return frame
 
-
-class MediaSetIterator(object):
-
-    def __init__(self, filepaths, start_frames, stop_frames, unit=None, path_map={},options=None):
+class MediaSetIterator:
+    def __init__(self, filepaths, start_frames, stop_frames, unit=None, path_map={}, options=None):
         """
-    The __init__ function is called when the class is instantiated.
-    It sets up the object with all of its initial values and does any other setup that needs to be done.
+        Initialize the media set iterator.
 
-
-    :param self: Refer to the object itself
-    :param filepaths: Store the filepaths of all the media files that are to be processed
-    :param start_frames: Specify the starting frame of each video
-    :param stop_frames: Set the last frame to be read from a video file
-    :param unit: Specify the unit of the start and stop frames
-    :param path_map: Map the filepaths to a new location
-    :return: Nothing
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Args:
+            filepaths (list of str): List of file paths.
+            start_frames (list of int): List of start frames for each file.
+            stop_frames (list of int): List of stop frames for each file.
+            unit (str, optional): Unit of start and stop, choices: frame, second, NA.
+            path_map (dict, optional): Map of file paths to new locations.
+            options (dict, optional): Additional options for the media set iterator.
+        """
         if isinstance(filepaths, str):
             self.filepaths = [filepaths]
         else:
@@ -658,42 +636,30 @@ class MediaSetIterator(object):
 
     def __len__(self):
         """
-    The __len__ function is a special function that returns the length of an object.
-    In this case, it's returning the number of media objects in the set.
+        Determine the length of the iterator.
 
-    :param self: Refer to the class itself
-    :return: The length of the media_set list
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Returns:
+            int: The length of the iterator.
+        """
         return len(self.media_set)
 
     def __iter__(self):
-        # Scan to the start frame
-        # self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.start_frame)
-        # self.i = self.start_frame
         """
-    The __iter__ function is called when an iterator object is created for the class.
-    This function should return an object (usually just self) that has a next() method defined.
-    The next() method should return the next value for the iterable, or raise StopIteration if there are no more values.
+        Create an iterator object.
 
-    :param self: Represent the instance of the class
-    :return: The object itself
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Returns:
+            MediaSetIterator: The iterator object.
+        """
         self.processed = 0
         return self
 
     def __next__(self):
-        # Read until video is completed
         """
-    The __next__ function is called by the for loop to get the next item in
-    the iterable. It should raise StopIteration when there are no more items
-    to return.
+        Get the next item from the iterator.
 
-    :param self: Represent the instance of the class
-    :return: The next item in the sequence
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Returns:
+            numpy.ndarray: The next item in the sequence.
+        """
         if self.i == len(self.media_set):
             raise StopIteration
         to_return = self.media_set[self.processed]
@@ -705,18 +671,20 @@ class MediaSetIterator(object):
         # frame = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
         # Return as bgr
 
-
-def ImageGenerator(filepath, start=None, stop=None, unit=None,options=None):
+def ImageGenerator(filepath, start=None, stop=None, unit=None, options=None):
     """
-The ImageGenerator function is a generator that yields frames from an image file.
+    The ImageGenerator function is a generator that yields frames from an image file.
 
-:param filepath: Specify the location of the image
-:param start: Set the starting frame of the video
-:param stop: Stop the generator at a certain frame
-:param unit: Determine the unit of time that is used for the start and stop parameters
-:return: A single frame, so we need to wrap it in a loop
-:doc-author: Joel Brogan, BRIAR team, Trelent
-"""
+    Args:
+        filepath (str): Path to the image file.
+        start (int, optional): Start frame of the video.
+        stop (int, optional): Stop frame of the video.
+        unit (str, optional): Unit of start and stop, choices: frame, second, NA.
+        options (dict, optional): Additional options for the image generator.
+
+    Yields:
+        numpy.ndarray: A frame from the image.
+    """
     filepath = filepath
 
     frame = cv2.imread(filepath)
@@ -753,40 +721,36 @@ The ImageGenerator function is a generator that yields frames from an image file
     i += 1
     # frame = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
 
-
     yield frame
-
 
 def single_frame_generate(frame, frame_num, ittype, filepath, start_frame, stop_frame, fps, video_length, clientoptions=None,
                           options_dict: dict = {}, database_name=None, det_list_list=None, whole_image=False,
                           request_start=-1,frame_load_time_start=-1, file_level_client_time_end=-1, requestConstructor=None):
-    # generate the BriarMedia
     """
-The single_frame_generate function is used to generate a single frame of BriarMedia.
-It takes in the following parameters:
-    - frame: The image or video frame that will be converted into BriarMedia.
-    - ittype: The type of iterator being used (ImageIterator, VideoIterator, MediaSetIterator).  This is needed because the function needs to know whether it's dealing with an image or a video file.  If you're using MediaSetIterators, then this parameter should be set to &quot;None&quot;.
-    - filepath: A string containing the path and filename for the media being processed by BRIAR.
+    Generate a single frame of BriarMedia.
 
-:param frame: Pass in the frame to be processed
-:param frame_num: Keep track of the frame number
-:param ittype: Determine the type of iterator used to generate frames
-:param filepath: Indicate the path to the file that is being processed
-:param start_frame: Indicate the starting frame of a video, and stop_frame is used to indicate the ending frame
-:param stop_frame: Determine the last frame to be processed
-:param video_length: Set the frame_count in the briarmedia
-:param clientoptions: Pass the options to the client
-:param options_dict : dict: Pass the options dictionary to the server
-:param database_name: Specify the database to which the request should be sent
-:param det_list_list: Pass the detection list from one frame to another
-:param whole_image: Determine if the whole image is sent to briar or just a cropped version
-:param request_start: Record the time at which the client api was called
-:param file_level_client_time_end: Record the time at which the file-level operations of the briar client api have completed
-:param requestConstructor: Create a request object
-:return: A request object, which is a briarrequest message
-:doc-author: Joel Brogan, BRIAR team, Trelent
-"""
+    Args:
+        frame (numpy.ndarray): The image or video frame to be converted into BriarMedia.
+        frame_num (int): The frame number.
+        ittype (type): The type of iterator being used (ImageIterator, VideoIterator, MediaSetIterator).
+        filepath (str): The path and filename for the media being processed by BRIAR.
+        start_frame (int): The starting frame of a video.
+        stop_frame (int): The ending frame of a video.
+        fps (float): The frame rate of the video.
+        video_length (int): The length of the video in frames.
+        clientoptions (briar_pb2.DetectionOptions, optional): The client options.
+        options_dict (dict, optional): Additional options in dictionary format.
+        database_name (str, optional): The database name.
+        det_list_list (list of list of briar_pb2.Detection, optional): The detection list from one frame to another.
+        whole_image (bool, optional): Whether to send the whole image to briar or just a cropped version.
+        request_start (int, optional): The time at which the client API was called.
+        frame_load_time_start (int, optional): The time at which the frame load started.
+        file_level_client_time_end (int, optional): The time at which the file-level operations of the briar client API have completed.
+        requestConstructor (callable, optional): The request constructor.
 
+    Returns:
+        briar_service_pb2.DetectRequest: The request object.
+    """
     if not ittype == MediaSetIterator:
         if clientoptions is not None and clientoptions.bgr:
             media = image_cv2proto(frame,
@@ -814,6 +778,7 @@ It takes in the following parameters:
     media.frame_rate = fps
     if video_length is not None:
         media.frame_count = video_length
+        
 
     durations = briar_pb2.BriarDurations()
     it_time = time.time()
@@ -832,10 +797,9 @@ It takes in the following parameters:
     req.durations.grpc_outbound_transfer_duration.start = time.time()
     return req
 
-
 def file_iter(media_files: list[str], clientoptions: briar_pb2.DetectionOptions = None, options_dict: dict = None, database_name: str = None, verbose: bool = False, request_start: int = -1, requestConstructor: callable = None):
     """
-    Iterates the paths in the media file list, loading them one by one and yielding grpc requests generated by <requestConstructor>.
+    Iterate the paths in the media file list, loading them one by one and yielding grpc requests generated by <requestConstructor>.
 
     Args:
         media_files (list of str): Paths to the media files to enroll from.
@@ -857,45 +821,71 @@ def file_iter(media_files: list[str], clientoptions: briar_pb2.DetectionOptions 
         # Dynamically break the iteration into individual components
 
         media_file = iteration[0]
-        media_file = pathmap_path2remotepath(media_file, path_map)
+        is_stream = is_streaming_url(media_file)
+        if not is_stream:
+            media_file = pathmap_path2remotepath(media_file, path_map)
         media_ext = os.path.splitext(media_file)[-1]
-
-        if media_ext.lower() in briar_media.BriarMedia.IMAGE_FORMATS:
-            # Create an enroll request for an image
-            media_iterator = ImageIterator(media_file)
-        elif media_ext.lower() in briar_media.BriarMedia.VIDEO_FORMATS:
-            startframe = stopframe = None
-            if clientoptions.start_frame is not None and clientoptions.start_frame > -1:
-                startframe = options.start_frame
-            if clientoptions.stop_frame is not None and clientoptions.stop_frame > -1:
-                stop_frame = options.stop_frame
-            media_iterator = VideoIterator(media_file,start=startframe,stop=stopframe,options=clientoptions)
-        else:
-            raise NotImplementedError
-        yield from frame_iter(media_iterator, clientoptions, options_dict, database_name, request_start=request_start,
+        # code that checks if media_file represents a file or a video stream, setting the is_stream flag if so
+        if is_stream or (hasattr(clientoptions,'chop_frames') and clientoptions.chop_frames > 0):
+            if hasattr(clientoptions,'chop_frames') and clientoptions.chop_frames > 0:
+                if clientoptions.verbose:
+                    print('Setting frame chopping length to ', clientoptions.chop_frames, 'frames')
+                print('Streaming from ', media_file, 'in chunks of', clientoptions.chop_frames,'frames')
+            else:
+                if clientoptions.verbose:
+                    print('Setting frame chopping length to ', DEFAULT_STREAMING_FRAME_CHOP, 'frames')
+            frame_batch_counter = i
+            should_continue_stream = True
+            cached_capture = None
+            while should_continue_stream:
+                if cached_capture is None:
+                    media_iterator = VideoIterator(media_file,options=clientoptions)
+                    cached_capture = media_iterator.cap
+                else:
+                    media_iterator = VideoIterator(media_file,options=clientoptions,cap=cached_capture)
+                
+                it = frame_iter(media_iterator, frame_batch_counter,clientoptions, options_dict, database_name, request_start=request_start,
+                              requestConstructor=requestConstructor,)
+                frame_batch_counter+=1
+                yield it
+                
+                
+                # Check if the stream is still open
+                
+        else:  
+            if media_ext.lower() in briar_media.BriarMedia.IMAGE_FORMATS:
+                # Create an enroll request for an image
+                media_iterator = ImageIterator(media_file)
+                print('made image iterator')
+            elif media_ext.lower() in briar_media.BriarMedia.VIDEO_FORMATS:
+                startframe = stopframe = None
+                if clientoptions.start_frame is not None and clientoptions.start_frame > -1:
+                    startframe = options.start_frame
+                if clientoptions.stop_frame is not None and clientoptions.stop_frame > -1:
+                    stop_frame = options.stop_frame
+                media_iterator = VideoIterator(media_file,start=startframe,stop=stopframe,options=clientoptions)
+            else:
+                raise NotImplementedError
+        yield frame_iter(media_iterator, 0,clientoptions, options_dict, database_name, request_start=request_start,
                               requestConstructor=requestConstructor)
 
-
-def frame_iter(media_iterator, clientoptions=None, options_dict: dict = {}, database_name=None, det_list_list=None,
+def frame_iter(media_iterator, frame_batch_counter,clientoptions=None, options_dict: dict = {}, database_name=None, det_list_list=None,
                whole_image=False, request_start=-1, requestConstructor=None):
     """
-    The frame_iter function is a generator that takes in an iterator of frames, and returns a request object for each frame.
-    The request object contains the following information:
-        - The frame number (int)
-        - The type of media_iterator (str)
-        - The filepath to the video/image sequence (str)
-        - A list containing all detections from previous iterations, if applicable. If not applicable, this will be None.
+    Iterate through the frames of a video and return a request object for each frame.
 
-    :param media_iterator: Iterate through the frames of a video
-    :param clientoptions: Pass the client options to the request
-    :param options_dict : dict: Pass in the options dictionary from the client
-    :param database_name: Specify the database name
-    :param det_list_list: Pass in a list of detection lists
-    :param whole_image: Determine whether or not to send the whole image
-    :param request_start: Keep track of when the request was begun
-    :param requestConstructor: Create a request object
-    :return: A generator that yields a single frame request
-    :doc-author: Joel Brogan, BRIAR team, Trelent
+    Args:
+        media_iterator (iterator): The iterator of frames.
+        clientoptions (briar_pb2.DetectionOptions, optional): The client options.
+        options_dict (dict, optional): Additional options in dictionary format.
+        database_name (str, optional): The database name.
+        det_list_list (list of list of briar_pb2.Detection, optional): The detection list from one frame to another.
+        whole_image (bool, optional): Whether to send the whole image to briar or just a cropped version.
+        request_start (int, optional): The time at which the client API was called.
+        requestConstructor (callable, optional): The request constructor.
+
+    Yields:
+        briar_service_pb2.DetectRequest: The request object.
     """
     file_level_client_time_end = time.time()
     # Create an enroll request for a video
@@ -912,6 +902,7 @@ def frame_iter(media_iterator, clientoptions=None, options_dict: dict = {}, data
         fps = -1
     send_start = request_start
     for frame_num, frame in enumerate(media_iterator):
+        cv2.imwrite(os.path.join('/Users/2r6/Downloads', 'frame'+"_"+str(frame_batch_counter).zfill(3)+"_"+str(frame_num)+'.jpg'),frame)
         req = single_frame_generate(
             frame,
             frame_num,
@@ -935,45 +926,36 @@ def frame_iter(media_iterator, clientoptions=None, options_dict: dict = {}, data
         # iterationtime0 = iterationtime1
         # frame_load_time_start = time.time()
         send_start = time.time()
-
+        # print('frame tme',len(media_iterator), frame_num,clientoptions.max_frames, 'time:', send_start - frame_load_time_start)
         if frame_num >= len(media_iterator)-1 or (clientoptions.max_frames > 0 and frame_num >= clientoptions.max_frames):
             req.media.description = "final_frame"
+        
         if hasattr(media_iterator,'stream'):
             if media_iterator.stream.Q.qsize() == 0 and media_iterator.stream.stopped:
+                print('stream stopped')
                 req.media.description = "final_frame"
+        if clientoptions.max_frames > 0 and frame_num >= clientoptions.max_frames-1:
+            req.media.description = "final_frame"
+            break
         yield req
-
 
 def enroll_frames_iter(database_name, video, detect_options=None, extract_options=None, enroll_options=None,
                        det_list_list=None, whole_image=False, request_start=-1):
-    """!
-    Iterates the paths in the media file list, loading them one by one and yielding grpc enroll requests
+    """
+    Iterate the paths in the media file list, loading them one by one and yielding grpc enroll requests.
 
-    @type database_name: str
-    @param database_name: Name of the database to enroll templates in
+    Args:
+        database_name (str): Name of the database to enroll templates in.
+        video (iterator): An iterator that generates cv2 frames.
+        detect_options (briar_pb2.DetectionOptions, optional): Command line options in protobuf format which control detection functionality.
+        extract_options (briar_pb2.ExtractOptions, optional): Command line options in protobuf format which control extraction functionality.
+        enroll_options (briar_pb2.EnrollOptions, optional): Command line options in protobuf format which control enrollment functionality.
+        det_list_list (list of list of briar_pb2.Detection, optional): If not None, it will contain 1 list of detections per media file.
+        whole_image (bool, optional): Ignore detections and run an extract on the whole image.
+        request_start (int, optional): Timestamp of when the request started.
 
-    @type video: an iterator that generates cv2 frames
-    @param media_files: Paths to the media files to enroll from
-
-    @type detect_options: briar_pb2.DetectionOptions
-    @param options: Command line options in protobuf format which control detection functionality
-
-    @type optons: briar_pb2.ExtractOptions
-    @param options: Command line options in protobuf format which control extraction functionality
-
-    @type optons: briar_pb2.EnrollOptions
-    @param options: Command line options in protobuf format which control enrollment functionality
-
-    @type det_list_list: List of list of briar_pb2.Detection
-    @param det_list_list: If not None, it will contains 1 list of detections per media file
-
-    @type whole_image: boolean
-    @param: Ignore detections and run an extract on the whole image
-
-    @type request_start: int
-    @param: timestamp of when the request started
-
-    @yield: briar_service_pb2.EnrollRequest
+    Yields:
+        briar_service_pb2.EnrollRequest: The enroll request.
     """
     if detect_options is None:
         detect_options = briar_pb2.DetectionOptions()
@@ -1034,46 +1016,39 @@ def enroll_frames_iter(database_name, video, detect_options=None, extract_option
         iterationtime0 = iterationtime1
         yield req
 
-
 async def aenumerate(asequence, start=0):
-    """Asynchronously enumerate an async iterator from a given start value"""
+    """
+    Asynchronously enumerate an async iterator from a given start value.
+
+    Args:
+        asequence (async iterator): The async iterator.
+        start (int, optional): The starting value.
+
+    Yields:
+        tuple: The index and the element from the async iterator.
+    """
     n = start
     async for elem in asequence:
         yield n, elem
         n += 1
 
-
 async def enroll_frames_iter_async(database_name, video, detect_options=None, extract_options=None, enroll_options=None,
                                    det_list_list=None, whole_image=False, request_start=-1):
-    """!
-    Asyncronously Iterates the paths in the media file list, loading them one by one and yielding grpc enroll requests.
-    This method should provide better video load performance and better request generation performance.
+    """
+    Asynchronously iterate the paths in the media file list, loading them one by one and yielding grpc enroll requests.
 
-    @type database_name: str
-    @param database_name: Name of the database to enroll templates in
+    Args:
+        database_name (str): Name of the database to enroll templates in.
+        video (async iterator): An iterator that generates cv2 frames.
+        detect_options (briar_pb2.DetectionOptions, optional): Command line options in protobuf format which control detection functionality.
+        extract_options (briar_pb2.ExtractOptions, optional): Command line options in protobuf format which control extraction functionality.
+        enroll_options (briar_pb2.EnrollOptions, optional): Command line options in protobuf format which control enrollment functionality.
+        det_list_list (list of list of briar_pb2.Detection, optional): If not None, it will contain 1 list of detections per media file.
+        whole_image (bool, optional): Ignore detections and run an extract on the whole image.
+        request_start (int, optional): Timestamp of when the request started.
 
-    @type video: an iterator that generates cv2 frames
-    @param media_files: Paths to the media files to enroll from
-
-    @type detect_options: briar_pb2.DetectionOptions
-    @param options: Command line options in protobuf format which control detection functionality
-
-    @type optons: briar_pb2.ExtractOptions
-    @param options: Command line options in protobuf format which control extraction functionality
-
-    @type optons: briar_pb2.EnrollOptions
-    @param options: Command line options in protobuf format which control enrollment functionality
-
-    @type det_list_list: List of list of briar_pb2.Detection
-    @param det_list_list: If not None, it will contains 1 list of detections per media file
-
-    @type whole_image: boolean
-    @param: Ignore detections and run an extract on the whole image
-
-    @type request_start: int
-    @param: timestamp of when the request started
-
-    @yield: briar_service_pb2.EnrollRequest
+    Yields:
+        briar_service_pb2.EnrollRequest: The enroll request.
     """
     if detect_options is None:
         detect_options = briar_pb2.DetectionOptions()
@@ -1134,7 +1109,6 @@ async def enroll_frames_iter_async(database_name, video, detect_options=None, ex
         iterationtime0 = iterationtime1
         yield req
 
-
 try:
     from tqdm import tqdm
 except:
@@ -1144,19 +1118,15 @@ except:
 class BriarProgress:
     def __init__(self, options, desc=None, name=None, leave=True, position=None):
         """
-    The __init__ function is called when the class is instantiated.
-    It sets up the progress bar and initializes some variables.
+        Initialize the progress bar.
 
-
-    :param self: Represent the instance of the class
-    :param options: Determine if progress bars are enabled
-    :param desc: Set the description of the progress bar
-    :param name: Name the progress bar
-    :param leave: Determine whether the progress bar should be left on screen after completion
-    :param position: Set the position of the progress bar
-    :return: Nothing
-    :doc-author: Joel Brogan, BRIAR team, Trelent
-    """
+        Args:
+            options (dict): The options for the progress bar.
+            desc (str, optional): The description of the progress bar.
+            name (str, optional): The name of the progress bar.
+            leave (bool, optional): Whether to leave the progress bar on screen after completion.
+            position (int, optional): The position of the progress bar.
+        """
         self.tqdm = tqdm
         self.pbar = None
         self.name = name
@@ -1175,6 +1145,13 @@ class BriarProgress:
             self.enabled = False
 
     def update(self, current=1, total=-1):
+        """
+        Update the progress bar.
+
+        Args:
+            current (int, optional): The current progress.
+            total (int, optional): The total progress.
+        """
         if self.enabled and self.tqdm is not None:
             if self.pbar is None:
                 if self.position is not None:
@@ -1186,19 +1163,28 @@ class BriarProgress:
                 self.pbar.update(current - self.prevstep)
                 self.prevstep = current
     def refresh(self):
+        """
+        Refresh the progress bar.
+        """
         if self.pbar is not None:
             self.pbar.refresh()
     def close(self):
+        """
+        Close the progress bar.
+        """
         if self.pbar is not None:
             self.pbar.close()
 
 def decodeMedia(media_pb, newsource=None):
-    """!
-    Convert protobuf media into a numpy array
+    """
+    Convert protobuf media into a numpy array.
 
-    @param media_pb: briar_pb2.BriarMedia
+    Args:
+        media_pb (briar_pb2.BriarMedia): The protobuf media.
+        newsource (str, optional): The new source for the media.
 
-    return: numpy.array
+    Returns:
+        numpy.ndarray: The decoded media.
     """
     if newsource:
         media_pb.source = newsource
@@ -1214,8 +1200,16 @@ def decodeMedia(media_pb, newsource=None):
             img = cv2.imread(media_pb.source)
     return img
 
-
 def isFinalFrame(request):
+    """
+    Check if the request is the final frame.
+
+    Args:
+        request (briar_pb2.BriarMedia or briar_service_pb2.DetectRequest): The request.
+
+    Returns:
+        bool: True if the request is the final frame, False otherwise.
+    """
     if isinstance(request,briar_pb2.BriarMedia):
         if request.description == "final_frame":
             return True

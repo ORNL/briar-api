@@ -11,7 +11,11 @@ def statusParseOptions(inputCommand=None):
     """!
     Generate options for getting status and parse command line arguments into them.
 
-    @return: 2 element Tuple of (optparse.Values, list) containing the parsed options and parameters respectively
+    This function sets up an optparse.OptionParser instance with various options for checking the server status,
+    including verbosity and output options. It then parses the command line arguments into these options.
+
+    @param inputCommand str: A string containing the command line input to parse. If None, the function will parse sys.argv.
+    @return: 2 element Tuple of (optparse.Values, list) containing the parsed options and parameters respectively.
     """
     # Parse command line arguments.
     args = ['']  # Add the names of arguments here.

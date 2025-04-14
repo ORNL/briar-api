@@ -90,11 +90,11 @@ class BriarClient(object):
     ##################################################
     def get_status(self, options=None):
         """!
-        Initialize the client and connect it to the specified server. Attempts a connection to localhost by default
+        Get the status of the connected BRIAR service.
 
-        @param options optparse.Values: 
+        @param options optparse.Values: Additional options for the status request.
 
-        @return: 5 element Tuple of str
+        @return: 5 element Tuple of str containing developer name, dev short, service name, version, api version, and status.
         """
         reply = self.stub.status(srvc_pb2.StatusRequest())
         reply: srvc_pb2.StatusReply
@@ -196,6 +196,14 @@ class BriarClient(object):
     ##################################################
 
     def iter_over_async(self, ait, loop):
+        """!
+        Iterate over an asynchronous iterator in a synchronous manner.
+
+        @param ait AsyncIterator: The asynchronous iterator to iterate over.
+        @param loop asyncio.AbstractEventLoop: The event loop to run the asynchronous iterator in.
+
+        yield: The next item from the asynchronous iterator.
+        """
         ait = ait.__aiter__()
 
         async def get_next():
@@ -214,6 +222,20 @@ class BriarClient(object):
     def sync_enroll_frames_iter(self, database_name, video, detect_options=None, extract_options=None,
                                 enroll_options=None,
                                 det_list_list=None, whole_image=False, request_start=-1):
+        """!
+        Synchronously enroll frames from a video.
+
+        @param database_name str: Name of the database to enroll into.
+        @param video str: Path to the video file.
+        @param detect_options briar_pb2.DetectionOptions: Options for detection.
+        @param extract_options briar_pb2.ExtractOptions: Options for extraction.
+        @param enroll_options briar_pb2.EnrollOptions: Options for enrollment.
+        @param det_list_list list: List of detection lists.
+        @param whole_image bool: Whether to use the whole image for enrollment.
+        @param request_start int: Start time of the request.
+
+        yield: briar_service_pb2.EnrollRequest
+        """
         loop = asyncio.get_event_loop()
         async_gen = self.enroll_frames_iter_async(database_name, video, detect_options, extract_options, enroll_options,
                                                   det_list_list, whole_image, request_start, yieldextra=True)
@@ -223,6 +245,23 @@ class BriarClient(object):
     def enroll_frames_iter(self, database_name, video, clientoptions=None, detect_options=None, extract_options=None,
                            enroll_options=None,
                            det_list_list=None, whole_image=False, request_start=-1, as_async=True, constructor=None):
+        """!
+        Enroll frames from a video.
+
+        @param database_name str: Name of the database to enroll into.
+        @param video str: Path to the video file.
+        @param clientoptions optparse.Values: Client options.
+        @param detect_options briar_pb2.DetectionOptions: Options for detection.
+        @param extract_options briar_pb2.ExtractOptions: Options for extraction.
+        @param enroll_options briar_pb2.EnrollOptions: Options for enrollment.
+        @param det_list_list list: List of detection lists.
+        @param whole_image bool: Whether to use the whole image for enrollment.
+        @param request_start int: Start time of the request.
+        @param as_async bool: Whether to use asynchronous enrollment.
+        @param constructor callable: Constructor for the enrollment requests.
+
+        yield: briar_service_pb2.EnrollRequest
+        """
         options_dict = {'detect_options': detect_options, 'extract_options': extract_options,
                         'enroll_options': enroll_options}
         if as_async:
@@ -239,6 +278,21 @@ class BriarClient(object):
     async def enroll_frames_iter_async(self, database_name, video, detect_options=None, extract_options=None,
                                        enroll_options=None,
                                        det_list_list=None, whole_image=False, request_start=-1, yieldextra=False):
+        """!
+        Asynchronously enroll frames from a video.
+
+        @param database_name str: Name of the database to enroll into.
+        @param video str: Path to the video file.
+        @param detect_options briar_pb2.DetectionOptions: Options for detection.
+        @param extract_options briar_pb2.ExtractOptions: Options for extraction.
+        @param enroll_options briar_pb2.EnrollOptions: Options for enrollment.
+        @param det_list_list list: List of detection lists.
+        @param whole_image bool: Whether to use the whole image for enrollment.
+        @param request_start int: Start time of the request.
+        @param yieldextra bool: Whether to yield extra information.
+
+        yield: briar_service_pb2.EnrollRequest
+        """
         if yieldextra:
             yield srvc_pb2.EnrollRequest()
         async for v in enroll_frames_iter_media_async(database_name, video, detect_options, extract_options,

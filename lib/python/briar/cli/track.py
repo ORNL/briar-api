@@ -22,12 +22,16 @@ from briar.media_converters import image_proto2cv
 TRACKLET_FILE_EXT = ".tracklet"
 
 
-def track(options=None, args=None,input_command=None,ret = False):
+def track(options=None, args=None, input_command=None, ret=False):
     """!
-    Using the options specified in the command line, runs a detection on the specified files. Writes results to disk
-    to a location specified by the cmd arguments
+    Using the options specified in the command line, runs a detection on the specified files and tracks the detected objects.
+    Writes results to disk to a location specified by the command arguments.
 
-    @return: No return - Function writes results to disk
+    @param options optparse.Values: Parsed command line options.
+    @param args list: List of command line arguments.
+    @param input_command str: A string containing the command line input to parse. If None, the function will parse sys.argv.
+    @param ret bool: If True, the function will return the tracking results. Otherwise, it writes results to disk.
+    @return: If ret is True, yields briar_service_pb2.TrackReply containing results.
     """
     api_start = time.time()
     if options is None and args is None:
@@ -36,16 +40,11 @@ def track(options=None, args=None,input_command=None,ret = False):
     client = briar_client.BriarClient(options)
 
     detect_options = detect_options2proto(options)
-    # # Check the status
-    # print("*"*35,'STATUS',"*"*35)
-    # print(client.get_status())
-    # print("*"*78)
 
-    # Get images from the cmd line arguments
+    # Get images from the command line arguments
     image_list, video_list = collect_files(args[1:], options)
     media_list = image_list + video_list
 
-    results = []
     if len(image_list) > 0:
         print('Cannot run tracking on images, {} image files will be skipped.'.format(len(image_list)))
         return
@@ -57,39 +56,35 @@ def track(options=None, args=None,input_command=None,ret = False):
             out_dir = options.out_dir
             os.makedirs(out_dir, exist_ok=True)
 
-        i = 0
-        startime = time.time()
+        start_time = time.time()
         for media_file in video_list:
             request_start = time.time()
-            media_ext = os.path.splitext(media_file)[-1]
             durations = []
             pbar = BriarProgress(options, name='Tracking')
-            it = file_iter([media_file], options, {"detect_options": detect_options}, request_start=request_start,
-                           requestConstructor=trackRequestConstructor)
-            for i, reply in enumerate(client.track(it)):
-                if options.max_frames > 0 and i >= options.max_frames:
-                    break
-                reply.durations.grpc_inbound_transfer_duration.end = time.time()
-                durs = reply.durations
-                durations.append(durs)
-                length = reply.progress.totalSteps
-                pbar.update(current=reply.progress.currentStep, total=length)
-                durs.total_duration.end = time.time()
-                if not reply.progress_only_reply:
-                    if len(reply.tracklets) > 0:
-                        if options.verbose:
-                            print("Tracked {} in {}s".format(len(reply.tracklets),
-                                                             timing.timeElapsed(durs.total_duration)))
-                        if not options.no_save:
-                            save_tracklets(media_file, reply.tracklets, options, i, verbose=options.verbose)
-                    if ret:
-                        yield reply
-            if options.save_durations:
-                timing.save_durations(media_file, durations, options, "enhance")
+            for it in file_iter([media_file], options, {"detect_options": detect_options}, request_start=request_start,
+                           requestConstructor=trackRequestConstructor):
+                for i, reply in enumerate(client.track(it)):
+                    if options.max_frames > 0 and i >= options.max_frames:
+                        break
+                    reply.durations.grpc_inbound_transfer_duration.end = time.time()
+                    durations.append(reply.durations)
+                    pbar.update(current=reply.progress.currentStep, total=reply.progress.totalSteps)
+                    reply.durations.total_duration.end = time.time()
+                    if not reply.progress_only_reply:
+                        if len(reply.tracklets) > 0:
+                            if options.verbose:
+                                print("Tracked {} in {}s".format(len(reply.tracklets),
+                                                                timing.timeElapsed(reply.durations.total_duration)))
+                            if not options.no_save:
+                                save_tracklets(media_file, reply.tracklets, options, i, verbose=options.verbose)
+                        if ret:
+                            yield reply
+                if options.save_durations:
+                    timing.save_durations(media_file, durations, options, "enhance")
 
         if options.verbose:
             print("Finished {} files in {} seconds".format(len(media_list),
-                                                           time.time() - startime))
+                                                           time.time() - start_time))
     else:
         print("Error. No image or video media found.")
 

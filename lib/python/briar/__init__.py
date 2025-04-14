@@ -7,7 +7,7 @@ import time
 import multiprocessing as mp
 from concurrent import futures
 import datetime
-__version__ = '2.3.8'
+__version__ = '2.4.0'
 
 import briar.briar_grpc.briar_service_pb2_grpc
 from sys import platform
@@ -19,7 +19,9 @@ elif platform == "darwin":
 elif platform == "win32":
     PLATFORM = "windows"
 
-DEFAULT_PORT = "0.0.0.0:50051"
+DEFAULT_PORT_FALLBACK = "0.0.0.0:50051"
+#get the default port from the environment variable BRIAR_PORT if it exists.  Otherwise, default to DEFAULT_PORT_FALLBACK
+DEFAULT_PORT = os.getenv("BRIAR_PORT", DEFAULT_PORT_FALLBACK)
 DEFAULT_SERVE_PORT = '[::]:50051'
 DEFAULT_MAX_MESSAGE_SIZE = 64 * 1024 * 1024 *8 # 512MB
 _ONE_DAY = datetime.timedelta(days=1)
