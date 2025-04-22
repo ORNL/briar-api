@@ -11,7 +11,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "briar-api"
-version = "2.4.0"
+readme = "README.md"
+version = "2.4.1"
 description = "A Python API for the Briar project"
 authors = [
     { name = "Author Name", email = "author@example.com" }

@@ -261,6 +261,7 @@ def sigset_enroll(input_command=None):
     @param input_command str: A string containing the command line input to parse. If None, the function will parse sys.argv.
     @return: None
     """
+    mp.set_start_method('spawn')
     async_iterator = False  # this flags the enroll_frames_iter to use asyncio (but only on the client side)
 
     options, args = parseSigsetEnrollOptions(input_command)

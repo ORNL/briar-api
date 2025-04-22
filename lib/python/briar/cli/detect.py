@@ -316,10 +316,8 @@ def detect(options=None, args=None, input_command=None, ret=False):
                 pbar = BriarProgress(options, name='Detecting')
                 durations = []
                 prev_duration = None
-                for reply in replies:
-                    print('GOT REPLY',reply)
+
                 for i, reply in enumerate(replies):
-                    print('in the third loop')
                     if options.max_frames > 0 and i >= options.max_frames:
                         break
                     if not isFinalReply(reply):

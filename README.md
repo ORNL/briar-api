@@ -1,19 +1,18 @@
 # BRIAR API
 ## Authors
 
-| Name        | Organization                  |
-| ----------- | ----------------------------- |
-| David Bolme | Oak Ridge National Laboratory |
-| Joel Brogan | Oak Ridge National Laboratory |
-| Ian Shelley | Oak Ridge National Laboratory |
-| Bob Zhang   | Oak Ridge National Laboratory |
+| Name         | Organization                  |
+| -----------  | ----------------------------- |
+| David Bolme  | Oak Ridge National Laboratory |
+| Joel Brogan  | Oak Ridge National Laboratory |
+| Ryan Shivers | Oak Ridge National Laboratory |
 
 ## Table of Contents
  <!-- * README (Manual)
    * [Overview](#overview)
    * [GRPC Interface](#grpc-interface)
      * [Main Components](#main-components)
-     * [Stubs and Services](#stubs-and-services)
+     * [Stubs and Services](#stsubs-and-services)
      * [Protobuf Documentation (html)](#protobuf-documentation)
    * [Language Support](#language-support)
    * [Installation](#installation)

@@ -240,16 +240,18 @@ def search(options=None, args=None, input_command=None, ret=False):
         for it in file_iter([filename], options, options_dict={"detect_options": detect_options, "extract_options": extract_options,
                                                           "search_options": search_options}, database_name=database,
                        request_start=request_start, requestConstructor=searchRequestConstructor):
+            
             searchReplies = client.search(it)
             pbar = BriarProgress(options, name='Searching')
             perfile_durations = []
+            # for f in it:
+            #     print('fake processing2')
             for i, searchReply in enumerate(searchReplies):
                 if options.max_frames > 0 and i >= options.max_frames:
                     break
 
                 length = searchReply.progress.totalSteps
                 pbar.update(current=searchReply.progress.currentStep, total=length)
-
                 if not searchReply.progress_only_reply:
                     templates = searchReply.extract_reply.templates
                     detections = searchReply.extract_reply.detect_reply
