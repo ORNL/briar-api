@@ -7,7 +7,7 @@ import time
 import multiprocessing as mp
 from concurrent import futures
 import datetime
-__version__ = '2.4.5'
+__version__ = '2.5.0'
 
 import briar.briar_grpc.briar_service_pb2_grpc
 from sys import platform
