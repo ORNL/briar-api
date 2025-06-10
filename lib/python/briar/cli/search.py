@@ -26,6 +26,8 @@ from matplotlib.offsetbox import (TextArea, DrawingArea, OffsetImage,
 from matplotlib.patches import Circle
 from google.protobuf.json_format import MessageToJson
 from briar.media import is_streaming_url
+from briar.viz import visualizer
+
 MATCHES_FILE_EXT = '.matches'
 
 
@@ -72,6 +74,8 @@ def addSearchOptions(parser):
 
     search_group.add_option("--return-media", action="store_true", dest="return_media", default=False,
                             help="Enables returning of media from workers to the client - will significantly increase output file sizes!")
+    search_group.add_option("--display", action="store_true", dest="display", default=False,
+                            help="Enables display of matches in a window. This is not supported on all platforms.")
 
     parser.add_option_group(search_group)
 
@@ -233,13 +237,17 @@ def search(options=None, args=None, input_command=None, ret=False):
 
     image_count = 0
     batch_start_time = api_end = time.time()  # api_end-api_start = total time API took to find files and initialize
+    if options.display:
+        visualizer_process = visualizer.DisplayManager()
+    else:
+        visualizer_process = None
     for filename in media_list:
         request_start = time.time()
         iterator_chunck_num = 0
         # run auto-detection on provided files, extract the detections, and enroll the results
         for it in file_iter([filename], options, options_dict={"detect_options": detect_options, "extract_options": extract_options,
                                                           "search_options": search_options}, database_name=database,
-                       request_start=request_start, requestConstructor=searchRequestConstructor):
+                       request_start=request_start, requestConstructor=searchRequestConstructor,frameVis=visualizer_process):
             
             searchReplies = client.search(it)
             pbar = BriarProgress(options, name='Searching')
@@ -286,6 +294,12 @@ def search(options=None, args=None, input_command=None, ret=False):
                         print('Saving the final search matches to', matches_path)
                     
                     grpc_json.save(searchReply, matches_path)
+                    if options.display and visualizer_process is not None:
+                        # print('Submitting matches to visualizer process')
+                        match_json = grpc_json.dump(searchReply)
+                        # visualizer_process.commit_frames()
+                        visualizer_process.append_matches(match_json)
+                        visualizer_process.play(framerate=-1)
                     if ret:
                         yield searchReply
             if options.save_durations:
@@ -295,6 +309,9 @@ def search(options=None, args=None, input_command=None, ret=False):
             if iterator_chunck_num >= options.max_stream_cycles and options.max_stream_cycles > 0:
                 print('done with streaming, reached max_stream_cycles')
                 break
+        if visualizer_process is not None:
+            print('Stopping visualizer process')
+            visualizer_process.stop()
         image_count += 1
         if options.max_images is not None and image_count >= options.max_images:
             break

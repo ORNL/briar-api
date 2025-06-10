@@ -26,6 +26,10 @@ def save(obj, save_path, options=None):
     m = MessageToJson(obj)
     with open(save_path, 'w') as fp:
         fp.write(m)
+def dump(obj, options=None):
+    m = MessageToJson(obj)
+    return m
+
 # def save(json_obj, save_path, options=None):
 #     """!
 #     Save a list or dictionary containing protobuf classes to a json file

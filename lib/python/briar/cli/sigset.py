@@ -29,7 +29,6 @@ from multiprocessing import Manager
 from concurrent import futures
 from briar.briar_client import BriarClient, _initialize_worker, _worker_channel_singleton, _worker_stub_singleton, _worker_port_singleton, _worker_proccess_position_singleton, _worker_thread_position_singleton, _client_identifier_singleton
 from briar.media import VideoIterator, ImageIterator, ImageGenerator, MediaSetIterator
-
 # from threading import Thread
 # from multiprocessing.pool import ThreadPool
 
@@ -157,6 +156,9 @@ def parseSigsetEnrollOptions(inputCommand=None):
                       help="DEPRECATED. FOR USE WITH LEGACY SYSTEMS ONLY. Indicates that subject ID's will be sent and stored as integers")
     parser.add_option("--no-sigset", action="store_true", dest="no_sigset", default=False,
                       help="If flag is set a sigset .xml file will not be required for the enrollment process or as an argument, and instead will enroll all found media files in the dataset specified dataset folder")
+    parser.add_option("--enrollment-structure", type="choice", choices=['per-folder', 'per-file', 'custom'],
+                      dest="enrollment_structure", default="per-folder",
+                      help="if per-folder, system will enroll each folder found as its own subject.  if per-file, each file will be its own subject")
     addConnectionOptions(parser)
     addDetectorOptions(parser)
     addExtractOptions(parser)
@@ -261,7 +263,13 @@ def sigset_enroll(input_command=None):
     @param input_command str: A string containing the command line input to parse. If None, the function will parse sys.argv.
     @return: None
     """
-    mp.set_start_method('spawn')
+    try:
+        mp.set_start_method('spawn')
+        print("spawned")
+    except RuntimeError as E:
+        print("Warning: Spawn method not set, using default", E)
+        pass
+
     async_iterator = False  # this flags the enroll_frames_iter to use asyncio (but only on the client side)
 
     options, args = parseSigsetEnrollOptions(input_command)
@@ -314,6 +322,7 @@ def sigset_enroll(input_command=None):
             if not multi_subject_formatting:
                 df_per_sub = df.loc[df['subjectId'] == subid].copy()
             elif multi_subject_formatting:
+                # print('multisub',df['subjectId'])
                 df_per_sub = df.loc[np.array([s[0] for s in df['subjectId'].values]) == subid]
             df_per_sub.reset_index()
             dfs_per_subject.append(df_per_sub)
@@ -714,7 +723,8 @@ def enroll_call_threaded(input):  # row,i, dataset_dir,detect_options,extract_op
 
     exstr = "row_" + str(i).zfill(5) + "_" + options.modality
     fixedpath = row['filepath']
-    fixedpath = pathmap_path2remotepath(fixedpath, options.path_map)
+    if not options.no_sigset:
+        fixedpath = pathmap_path2remotepath(fixedpath, options.path_map)
     path = os.path.join(dataset_dir, fixedpath)
     subject_ids = row['subjectId']  # row['subjectId'] contains a list as of v1.9.0
     enroll_options.subject_ids

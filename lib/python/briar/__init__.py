@@ -7,7 +7,7 @@ import time
 import multiprocessing as mp
 from concurrent import futures
 import datetime
-__version__ = '2.4.1'
+__version__ = '2.4.5'
 
 import briar.briar_grpc.briar_service_pb2_grpc
 from sys import platform
@@ -132,6 +132,12 @@ Initialize and run the BRIARService. Runs until killed
         msize = options.max_message_size
         worker_count = options.thread_per_service_count
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=worker_count),
+                                 compression=grpc.Compression.Gzip,  # Default for responses
+        compression_algorithms=[  # This sets supported decompress algorithms for incoming requests
+            grpc.Compression.Gzip,
+            grpc.Compression.Deflate,  # Comment out if not available in your grpcio
+            grpc.Compression.NoCompression
+        ],
                          options=[('grpc.max_send_message_length', max_message_size),
                                   ('grpc.max_receive_message_length', max_message_size),
                                   ("grpc.so_reuseport", 1),],maximum_concurrent_rpcs=worker_count*2) #we add +1 to ensure the queue doesn't hit a resource exhausted limit

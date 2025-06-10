@@ -61,6 +61,9 @@ def addConnectionOptions(parser):
                                 help="Save separate durations files for each media file input")
     connection_group.add_option("--chop-frames", type="int", dest="chop_frames", default=-1,
                             help="Sets the number fo frames to chop a video or stream in to. Default=-1 (no chopping).")
+    
+    connection_group.add_option("--scale", type="float", dest="scale", default=1,
+                            help="number with which to scale the input stream to before sending to the server. Default=1 (no scaling). Greater than 1 denotes upscaling, less than 1 denotes downscaling. This is useful for reducing the size of the input stream to reduce bandwidth usage.")
     connection_group.add_option("--max-stream-cycles", type="int", dest="max_stream_cycles", default=-1,
                             help="Sets the maximum number of times to run a stream (chopped by --chop-frames). Default=-1 (runs indefinitely).")
     connection_group.add_option("--skip-frames", type="int", dest="skip_frames", default=0,

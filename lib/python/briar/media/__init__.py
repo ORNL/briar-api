@@ -15,7 +15,8 @@ from briar.media.VideoStream import FileVideoStream_cv2, FileVideoStream_imageio
 import numpy as np
 import time
 import math
-
+from briar.viz.visualizer import DisplayManager
+from briar import PLATFORM
 DEFAULT_STREAMING_FRAME_CHOP = 480  # about 20 seconds @ 24 fps
 
 def is_streaming_url(media_file):
@@ -28,6 +29,8 @@ def is_streaming_url(media_file):
     Returns:
         bool: True if it's a streaming URL, False otherwise.
     """
+    if PLATFORM == 'darwin' and media_file.isdigit():
+        return True # for macOS, we assume a digit is a streaming URL (e.g., camera ID)
     streaming_url_pattern = re.compile(r'^(http|https|rtsp|rtmp)://')
     return bool(streaming_url_pattern.match(media_file))
 
@@ -114,8 +117,8 @@ class VideoIterator(BriarVideoIterator):
         self.is_stream = is_streaming_url(filepath)
         self.cap_reused = False
         if cap is not None:
-            # if options.verbose:
-            print('Using cv2.VideoCapture object as input')
+            if options.verbose:
+                print('Using cv2.VideoCapture object as input')
             self.cap = cap
             self.is_stream = True
             self.cap_reused = True
@@ -124,9 +127,14 @@ class VideoIterator(BriarVideoIterator):
         self.skip_length = options.skip_frames
         self.maintainCapture = False
         self.no_more_frames = False
+        self.scale = self.options.scale
         if not self.debug_empty and self.cap is None:
-            print('setting capture')
-            self.cap = cv2.VideoCapture(self.filepath)
+            spath = self.filepath
+            if spath.isdigit():
+                print('looking at spath',spath)
+
+                spath = int(spath)
+            self.cap = cv2.VideoCapture(spath)
         # Check if camera opened successfully
         self.isOpened = self.is_opened()
         if not self.debug_empty and self.cap.isOpened() == False:
@@ -179,10 +187,14 @@ class VideoIterator(BriarVideoIterator):
                 self.frame_count = self.length = int(math.floor(self.frame_count / (self.skip_length+1)))
                 self.fps = int(self.fps / (self.skip_length+1))
     def get_capture_attributes(self):
-        self.frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self.frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        print('rescaling:',self.scale)
+        self.frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)*self.scale)
+        self.frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)*self.scale)
         if not self.is_stream:
-            self.frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            if self.options.chop_frames > 0:
+                self.frame_count = self.options.chop_frames
+            else:
+                self.frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         else:
             if self.options.chop_frames > 0:
                 self.frame_count = self.options.chop_frames
@@ -243,6 +255,8 @@ class VideoIterator(BriarVideoIterator):
                     else:
                         break
                 pos_frame = self.cap.get(cv2.CAP_PROP_POS_FRAMES)
+                if not self.scale == 0:
+                    pos_frame = cv2.resize(pos_frame, (self.frame_width, self.frame_height))
                 assert int(pos_frame) == self.start_frame, f"Video Iterator start could not be set to {self.start_frame}"
         self.i = self.start_frame
         self.processed = 0
@@ -282,7 +296,8 @@ class VideoIterator(BriarVideoIterator):
             ret, frame = self.cap.read()  # reads in in BGR format. If BGR is set to true, these channels should not get flipped down-stream before being sent to the server.
             if frame is None or ret is False:
                 if self.i < self.start_frame + len(self):
-                    print('Warning: iterator only made it through', self.i, 'frames of', len(self))
+                    if self.options is not None and self.options.verbose:
+                        print('Warning: iterator only made it through', self.i, 'frames of', len(self))
                 if self.options is not None and self.options.verbose:
                     print('end of file3',ret, type(frame))
                 self.no_more_frames = True
@@ -800,7 +815,7 @@ def single_frame_generate(frame, frame_num, ittype, filepath, start_frame, stop_
     req.durations.grpc_outbound_transfer_duration.start = time.time()
     return req
 
-def file_iter(media_files: list[str], clientoptions: briar_pb2.DetectionOptions = None, options_dict: dict = None, database_name: str = None, verbose: bool = False, request_start: int = -1, requestConstructor: callable = None):
+def file_iter(media_files: list[str], clientoptions: briar_pb2.DetectionOptions = None, options_dict: dict = None, database_name: str = None, verbose: bool = False, request_start: int = -1, requestConstructor: callable = None,frameVis=None):
     """
     Iterate the paths in the media file list, loading them one by one and yielding grpc requests generated by <requestConstructor>.
 
@@ -848,9 +863,12 @@ def file_iter(media_files: list[str], clientoptions: briar_pb2.DetectionOptions 
                     cached_capture = media_iterator.cap
                 else:
                     media_iterator = VideoIterator(media_file,options=clientoptions,cap=cached_capture)
+                fps = media_iterator.fps
+                if frameVis:
+                    frameVis.set_fps(fps)
                 # print('made videoiterator!')
                 it = frame_iter(media_iterator, frame_batch_counter,clientoptions, options_dict, database_name, request_start=request_start,
-                              requestConstructor=requestConstructor,)
+                              requestConstructor=requestConstructor,frameVis=frameVis)
                 if max_iterations is None and not is_stream:
                     max_iterations = media_iterator.get_total_frames()
                 frame_batch_counter+=1
@@ -873,14 +891,17 @@ def file_iter(media_files: list[str], clientoptions: briar_pb2.DetectionOptions 
                 if clientoptions.stop_frame is not None and clientoptions.stop_frame > -1:
                     stop_frame = options.stop_frame
                 media_iterator = VideoIterator(media_file,start=startframe,stop=stopframe,options=clientoptions)
+                fps = media_iterator.fps
+                if frameVis:
+                    frameVis.set_fps(fps)
             else:
                 raise NotImplementedError
-        print('yielding frame_iter')
+        # print('yielding frame_iter')
         yield frame_iter(media_iterator, 0,clientoptions, options_dict, database_name, request_start=request_start,
-                              requestConstructor=requestConstructor)
+                              requestConstructor=requestConstructor,frameVis=frameVis)
 
 def frame_iter(media_iterator, frame_batch_counter,clientoptions=None, options_dict: dict = {}, database_name=None, det_list_list=None,
-               whole_image=False, request_start=-1, requestConstructor=None):
+               whole_image=False, request_start=-1, requestConstructor=None,frameVis=None):
     """
     Iterate through the frames of a video and return a request object for each frame.
 
@@ -897,6 +918,7 @@ def frame_iter(media_iterator, frame_batch_counter,clientoptions=None, options_d
     Yields:
         briar_service_pb2.DetectRequest: The request object.
     """
+    frameVis : DisplayManager
     file_level_client_time_end = time.time()
     # Create an enroll request for a video
     iterationtime0 = time.time()
@@ -913,6 +935,9 @@ def frame_iter(media_iterator, frame_batch_counter,clientoptions=None, options_d
     send_start = request_start
     for frame_num, frame in enumerate(media_iterator):
         # print('doing frame gen')
+        if frameVis is not None:
+            # print('Appending frame', frame_num, 'of', len(media_iterator), 'to frameVis')
+            frameVis.append_frame(frame_num,frame)
         req = single_frame_generate(
             frame,
             frame_num,

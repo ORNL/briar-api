@@ -537,8 +537,12 @@ class BriarClient(object):
 
         @return: briar_service_pb2.SearchReply
         """
-        for search_reply in self.stub.search(search_iter):
-            yield search_reply
+        try:
+            for search_reply in self.stub.search(search_iter):
+                yield search_reply
+        except Exception as e:
+            self.print_verbose('There was a warning in the briar_client when attempting to retrieve a search reply (likely due to looking for frames that arent there, if --chop-frames is used or input is a stream)')
+            self.print_verbose(e)
         self.print_verbose("Finished Search.")
 
     ##################################################
@@ -720,7 +724,8 @@ def _initialize_worker(server_address,proc_number,thread_number,count_q):
     global _singleton_pool
     global _client_identifier_singleton
     _worker_port_singleton = server_address
-    _worker_channel_singleton = grpc.insecure_channel(server_address)
+    _worker_channel_singleton = grpc.insecure_channel(server_address,options=[
+        ('grpc.default_compression_algorithm', grpc.Compression.NoCompression)])
     _worker_stub_singleton = srvc_pb2_grpc.BRIARServiceStub(
         _worker_channel_singleton
     )

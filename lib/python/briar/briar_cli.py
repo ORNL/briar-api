@@ -7,6 +7,9 @@ identification on faces, whole bodies, and walking gaits, as well as various dat
 functions. Briar does not implement these detect, extract, enroll, etc functions itself, but rather acts as a
 means for connecting with servers (outlined with service.py)
 
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
 @author: Joel Brogan
 """
 

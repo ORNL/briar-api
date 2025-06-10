@@ -17,11 +17,17 @@ The parseBriarFolder function takes a path to a folder and returns a list of all
     image_list,video_list = collect_files([path], options)
     columns = ('entryId', 'subjectId', 'filepath', 'modality', 'media', 'media_format', 'start', 'stop', 'unit')
     data_list = []
-    for medialist,media_type in zip([image_list,video_list],['digitalStill,digitalVideo']):
+    media_types = ['digitalStill','digitalVideo']
+    for i,medialist in enumerate([image_list,video_list]):
+        media_type = media_types[i]
         for mediapath in medialist:
             medianame = os.path.basename(mediapath)
             name_parts = medianame.split('_')
-            subjectId = name_parts[::max(1,len(name_parts)-1)]
+            if hasattr(options,'enrollment_structure'):
+                if options.enrollment_structure == 'per-file':
+                    subjectId = name_parts[::max(1,len(name_parts)-1)][0]
+                elif options.enrollment_structure == 'per-folder':
+                    subjectId = os.path.basename(os.path.dirname(mediapath))
             subjectIds = [subjectId]
             
             filepath = mediapath
@@ -30,6 +36,7 @@ The parseBriarFolder function takes a path to a folder and returns a list of all
             fname, ext = os.path.splitext(medianame)
             entryId = mediapath.replace('/','_')
             media_format = ext[1:]
+            # print('media format',media_format)
             start = "NA"
             stop = 'NA'
             unit = 'NA'
