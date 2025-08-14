@@ -255,8 +255,6 @@ class VideoIterator(BriarVideoIterator):
                     else:
                         break
                 pos_frame = self.cap.get(cv2.CAP_PROP_POS_FRAMES)
-                if not self.scale == 0:
-                    pos_frame = cv2.resize(pos_frame, (self.frame_width, self.frame_height))
                 assert int(pos_frame) == self.start_frame, f"Video Iterator start could not be set to {self.start_frame}"
         self.i = self.start_frame
         self.processed = 0
@@ -308,6 +306,10 @@ class VideoIterator(BriarVideoIterator):
             gaussiang = np.random.random((self.frame_height, self.frame_width, 1))
             gaussianb = np.random.random((self.frame_height, self.frame_width, 1))
             frame = (np.concatenate((gaussianr, gaussiang, gaussianb), axis=2) * 255).astype(np.uint8)
+
+        if not self.scale == 0:
+            frame = cv2.resize(frame, (self.frame_width, self.frame_height))
+
         self.processed += 1
         self.i += 1
         # frame = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
