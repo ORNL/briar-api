@@ -187,7 +187,8 @@ class VideoIterator(BriarVideoIterator):
                 self.frame_count = self.length = int(math.floor(self.frame_count / (self.skip_length+1)))
                 self.fps = int(self.fps / (self.skip_length+1))
     def get_capture_attributes(self):
-        print('rescaling:',self.scale)
+        if self.scale != 1:
+            print('rescaling:', self.scale)
         self.frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)*self.scale)
         self.frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)*self.scale)
         if not self.is_stream:

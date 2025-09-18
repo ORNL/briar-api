@@ -9,7 +9,8 @@ import json
 import random
 import numpy as np
 from multiprocessing import Process, Queue
-
+from threading import Thread
+import time
 
 def assign_colors(track_ids):
     random.seed(42)
@@ -107,10 +108,49 @@ def overlay_detections_on_frame(frame, detections, track_colors, track_matches, 
 
 class DisplayProcess(Process):
     """Background process handling frame & match caching and display."""
-    def __init__(self):
+    def __init__(self, display=True, rtsp_stream=False, rtsp_stream_port="8554", rtsp_user="", rtsp_pass="", frame_batch_size=0):
         super().__init__()
         self.queue = Queue()
         self.chip_map = {}
+        self.rtsp_stream = rtsp_stream
+        self.display = display
+
+        if self.rtsp_stream:
+
+            #Only import RTSP dependencies if it is actually being used, these dependencies are difficult to manage and we don't want everyone to have to deal with them
+            import gi
+            gi.require_version('Gst', '1.0')
+            from gi.repository import Gst, GObject
+            from briar.rtsp.rtsp import GstServer
+
+            try:
+
+                #Create a multiprocessing Queue for sending frames to the RTSP stream processor
+                self.frame_queue = Queue(maxsize=int(frame_batch_size * 1.25))
+
+                #Initialize and start the GStreamer RTSP process
+                GObject.threads_init()
+                Gst.init(None)
+                server = GstServer(frame_queue=self.frame_queue, rtsp_stream_port=rtsp_stream_port, rtsp_user=rtsp_user, rtsp_pass=rtsp_pass, frame_batch_size=frame_batch_size)
+                self.server = server
+                loop = GObject.MainLoop()
+                self.my_frame = [None]
+                th = Thread(target=loop.run)
+                th.start()
+
+                #If the port was already bound it will fail to be bound by GStreamer
+                if server.get_bound_port() == -1:
+                    print(f"could not bind port {rtsp_stream_port} for RTSP stream.")
+                    self.rtsp_stream = False
+                else:
+                    print(f"RTSP stream initializing at rtsp://{server.get_address()}:{server.get_bound_port()}/searchstream")
+
+            except Exception as e:
+                print(f"error initializing RTSP stream: {e}")
+                self.rtsp_stream = False
+        else:
+            print("Output RTSP stream disabled")
+            self.rtsp_stream = False
 
     def load_matches(self, json_str):
         data = json.loads(json_str)
@@ -171,7 +211,23 @@ class DisplayProcess(Process):
                 pad_width = frame_w - strip_w
                 strip = cv2.copyMakeBorder(strip, 0, 0, 0, pad_width, cv2.BORDER_CONSTANT, value=(255, 255, 255))
             combined = cv2.vconcat([frame, strip])
-            cv2.imshow('Matches Display', combined)
+
+            #If --display is enabled output to display window
+            if self.display:
+                cv2.imshow('Matches Display', combined)
+
+            #If --rtsp-stream is enabled, make room in Queue if needed and append new frame to RTSP Queue
+            if self.rtsp_stream:
+                if self.frame_queue.full():
+                    try:
+                        self.frame_queue.get_nowait()
+                    except:
+                        pass
+
+                try:
+                    self.frame_queue.put(combined)
+                except:
+                    pass
 
             if cv2.waitKey(wait_per_frame_ms) & 0xFF == ord('q'):
                 break
@@ -221,12 +277,13 @@ class DisplayManager:
     High-level wrapper around DisplayProcess.
     Buffers frames and matches, commits them in batches, and plays back.
     """
-    def __init__(self):
-        self.proc = DisplayProcess()
+    def __init__(self, display=True, rtsp_stream=False, rtsp_stream_port="8554", rtsp_user="", rtsp_pass="", frame_batch_size=0):
+        self.proc = DisplayProcess(display=display, rtsp_stream=rtsp_stream, rtsp_stream_port=rtsp_stream_port, rtsp_user=rtsp_user, rtsp_pass=rtsp_pass, frame_batch_size=frame_batch_size)
         self.proc.start()
         self._frame_dict = {}
         self.fps = 30
         self._matches_json = None
+        self.rtsp_stream = self.proc.rtsp_stream
 
     def append_frame(self, frame_idx, frame):
         """Add or update a single frame to the buffer."""
@@ -239,6 +296,11 @@ class DisplayManager:
         if items:
             self.proc.submit_frames(items)
             self._frame_dict.clear()
+
+    def get_res(self):
+        items = list(self._frame_dict.items())
+        if items:
+            return items[0][1].shape
 
     def append_matches(self, matches_json_str):
         """Load .matches JSON for the current batch of frames."""
@@ -255,10 +317,17 @@ class DisplayManager:
         self.fps = fps
     def play(self, top_n=3, framerate=-1):
         """Commit any remaining frames/matches, then display them."""
-        self.commit_frames()
         if framerate < 0:
             framerate = self.fps
-        print(f"Playing back with framerate: {framerate} FPS")
+
+        #Set framerate of RTSP stream if streaming is enabled
+        if self.rtsp_stream:
+            frame_shape = self.get_res()
+            self.proc.server.factory.set_stream_options(fps=framerate, width=frame_shape[1], height=frame_shape[0])
+        else:
+            print(f"Playing back with framerate: {framerate} FPS")
+
+        self.commit_frames()
         if self._matches_json is None:
             raise RuntimeError("No matches loaded. Call append_matches() first.")
         wait_ms = max(1, int(1000/framerate))

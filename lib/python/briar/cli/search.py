@@ -76,6 +76,14 @@ def addSearchOptions(parser):
                             help="Enables returning of media from workers to the client - will significantly increase output file sizes!")
     search_group.add_option("--display", action="store_true", dest="display", default=False,
                             help="Enables display of matches in a window. This is not supported on all platforms.")
+    search_group.add_option("--rtsp-stream", action="store_true", dest="rtsp_stream", default=False,
+                            help="Enables RTSP stream of matches. This is not supported on all platforms.")
+    search_group.add_option("--rtsp-stream-port", type="str", dest="rtsp_stream_port", default="8554",
+                            help="Set the port for RTSP video to be streamed to if --rtsp-stream is enabled.")
+    search_group.add_option("--rtsp-user", type="str", dest="rtsp_user", default="",
+                            help="Username for RTSP basic auth")
+    search_group.add_option("--rtsp-pass", type="str", dest="rtsp_pass", default="",
+                            help="Password for RTSP basic auth")
 
     parser.add_option_group(search_group)
 
@@ -237,8 +245,24 @@ def search(options=None, args=None, input_command=None, ret=False):
 
     image_count = 0
     batch_start_time = api_end = time.time()  # api_end-api_start = total time API took to find files and initialize
-    if options.display:
-        visualizer_process = visualizer.DisplayManager()
+
+    if options.display and options.rtsp_stream:
+        print("The flags --display and --rtsp-stream cannot be enabled at the same time. Please choose one or the other.")
+        return
+
+    frame_batch_size = 0
+    if options.chop_frames != -1:
+        frame_batch_size = options.chop_frames
+        if options.skip_frames != 0:
+            frame_batch_size = int(frame_batch_size / (options.skip_frames + 1))
+
+    print(f"frame batch size: {frame_batch_size}")
+
+    if options.display or options.rtsp_stream:
+        visualizer_process = visualizer.DisplayManager(display=options.display, rtsp_stream=options.rtsp_stream, rtsp_stream_port=options.rtsp_stream_port, rtsp_user=options.rtsp_user, rtsp_pass=options.rtsp_pass, frame_batch_size=frame_batch_size)
+        if options.rtsp_stream and not visualizer_process.rtsp_stream:
+            print("The RTSP stream could not be initialized. Exiting...")
+            os._exit(1)
     else:
         visualizer_process = None
     for filename in media_list:
@@ -294,7 +318,7 @@ def search(options=None, args=None, input_command=None, ret=False):
                         print('Saving the final search matches to', matches_path)
                     
                     grpc_json.save(searchReply, matches_path)
-                    if options.display and visualizer_process is not None:
+                    if (options.display or options.rtsp_stream) and visualizer_process is not None:
                         # print('Submitting matches to visualizer process')
                         match_json = grpc_json.dump(searchReply)
                         # visualizer_process.commit_frames()
