@@ -45,11 +45,18 @@ class SensorFactory(GstRtspServer.RTSPMediaFactory):
         if self.fps != fps:
             self.fps = fps
             self.duration = 1 / self.fps * Gst.SECOND  # duration of a frame in nanoseconds
-            self.launch_string = 'appsrc name=source is-live=true block=true format=GST_FORMAT_TIME ' \
-                                'caps=video/x-raw,format=BGR,width={},height={},framerate={}/1 ' \
-                                '! videoconvert ! video/x-raw,format=I420 ' \
-                                '! x264enc speed-preset=ultrafast tune=zerolatency ' \
-                                '! rtph264pay config-interval=1 name=pay0 pt=96'.format(width, height, self.fps)
+            self.launch_string = (
+                            'appsrc name=source is-live=true block=true do-timestamp=true format=GST_FORMAT_TIME '
+                            'caps=video/x-raw,format=BGR,width={},height={},framerate={}/1 '
+                            '! videoconvert ! videorate ! video/x-raw,format=I420,framerate={}/1 '
+                            '! x264enc speed-preset=ultrafast tune=zerolatency '
+                            '   bitrate=1500 key-int-max={} bframes=0 ref=1 aud=true '
+                            '   vbv-buf-capacity=1500 option-string=scenecut=0:open-gop=0 '
+                            '! h264parse config-interval=-1 '
+                            '! video/x-h264,stream-format=byte-stream,alignment=au,profile=constrained-baseline '
+                            '! queue max-size-time=0 max-size-bytes=0 max-size-buffers=30 leaky=downstream '
+                            '! rtph264pay name=pay0 pt=96 config-interval=-1 mtu=1200 aggregate-mode=none'
+                        ).format(width, height, self.fps, self.fps, self.fps * 3)
             print(f"RTSP stream server started at {width}x{height} resolution and {self.fps} fps")
 
     #Called when new RTSP client connects
