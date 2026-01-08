@@ -270,7 +270,7 @@ class BriarClient(object):
                                                     det_list_list, whole_image, request_start)
             yield from sync_gen
         else:
-            yield from frame_iter(video, clientoptions, options_dict, database_name, det_list_list, whole_image,
+            yield from frame_iter(video, 0, clientoptions, options_dict, database_name, det_list_list, whole_image,
                                   request_start, constructor)
             # yield from  enroll_frames_iter_media(database_name, video, detect_options, extract_options, enroll_options,
             #                det_list_list, whole_image, request_start)

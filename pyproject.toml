@@ -23,7 +23,7 @@ dependencies = [
     "pyvision-toolkit",
     "grpcio",
     "grpcio-tools",
-    "mypy-protobuf",
+    "mypy-protobuf==3.7.0",
     "tqdm",
     "matplotlib",
     "pandas",
