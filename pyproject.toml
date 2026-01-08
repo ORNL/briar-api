@@ -28,6 +28,7 @@ dependencies = [
     "matplotlib",
     "pandas",
     "colorama",
+    "imageio[ffmpeg]",
     "protobuf==5.29.3",
 ]
 
