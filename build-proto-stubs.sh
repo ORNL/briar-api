@@ -8,7 +8,7 @@ python -m grpc_tools.protoc --proto_path=proto --python_out=lib/python --mypy_ou
 echo "Building C++ Stubs"
 export CPP_DIR=lib/cpp/briar/briar_grpc
 mkdir -p $CPP_DIR
-protoc -I proto --plugin=grpc_cpp_plugin --proto_path=proto --cpp_out=lib/cpp proto/briar/briar_grpc/briar.proto proto/briar/briar_grpc/briar_error.proto proto/briar/briar_grpc/briar_service.proto
+protoc -I proto --plugin=grpc_cpp_plugin --proto_path=proto --cpp_out=lib/cpp --grpc_out=lib/cpp --plugin=protoc-gen-grpc=`which grpc_cpp_plugin` proto/briar/briar_grpc/briar.proto proto/briar/briar_grpc/briar_error.proto proto/briar/briar_grpc/briar_service.proto
 
 # C Sharp
 echo "Building C# Stubs"
