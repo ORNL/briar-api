@@ -299,7 +299,11 @@ def search(options=None, args=None, input_command=None, ret=False):
                     if options.verbose and not options.progress:
                         print('searched 1 image in ', timing.timeElapsed(searchReply.durations.total_duration), ' seconds')
                     out_dir = options.out_dir
-                    if not options.out_dir:
+                    if options.out_dir:
+                        matches_name = os.path.splitext(os.path.basename(filename))[0] + MATCHES_FILE_EXT
+                        matches_path = os.path.join(out_dir, matches_name)
+                        os.makedirs(out_dir, exist_ok=True)
+                    else:
                         if is_streaming_url(filename):
                             name,ext = os.path.splitext(os.path.basename(filename))
                             url_to_filename = name+"_"+str(iterator_chunck_num).zfill(5)+ext + MATCHES_FILE_EXT
